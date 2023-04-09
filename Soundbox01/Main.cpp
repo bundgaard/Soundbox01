@@ -1,7 +1,9 @@
 #include "Application.h"
 #include "WaveReader.h"
+#include <vector>
+#include <string>
 
-
+using namespace tretton63;
 
 IXAudio2* audio = nullptr;
 IXAudio2MasteringVoice* master = nullptr;
@@ -12,15 +14,10 @@ WAVEFORMATEX WaveFormatEx{};
 constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
 constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
 
-using namespace tretton63;
-
-
 std::optional<WAVEDATA> LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
 {
-	
+
 	WAVEDATA Result{};
-	SYSTEM_INFO Si{};
-	GetSystemInfo(&Si);
 
 	HANDLE SoundFile = CreateFile(Filename.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 	DWORD dwError = GetLastError();
@@ -32,17 +29,17 @@ std::optional<WAVEDATA> LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\
 
 	if (SoundFile)
 	{
-		
+
 		LARGE_INTEGER SoundFileSize{};
 		GetFileSizeEx(SoundFile, &SoundFileSize);
 
 		OutputDebugStringW(L"Opened SoundFile\n");
 		LPVOID View = nullptr;
 		HANDLE SoundFileMapping = CreateFileMapping(SoundFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
-		
+
 		if (SoundFileMapping)
 		{
-			
+
 			OutputDebugStringW(L"Opened a mapping to file\n");
 
 			View = MapViewOfFile(SoundFileMapping, FILE_MAP_READ, 0, 0, 0);
@@ -85,22 +82,55 @@ std::optional<WAVEDATA> LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\
 	return Result;
 }
 
-
-int wmain(int argc, wchar_t** argv)
+std::vector<std::wstring> ListMusicFiles(std::wstring const& Folder)
 {
+	std::vector<std::wstring> Files;
+	WIN32_FIND_DATAW Block{};
+	std::wstring Extension = Folder;
+	Extension += L"\\*.wav";
 
+	HANDLE FindHandle = FindFirstFileW(Extension.c_str(), &Block);
+	// TODO(david): add error checking
+	if (FindHandle)
+	{
+		do {
+			Files.push_back(Block.cFileName);
+		} while (FindNextFileW(FindHandle, &Block));
+		FindClose(FindHandle);
+	}
+
+	return Files;
+}
+static LRESULT CALLBACK SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_CREATE:
+	{
+
+	}
+	return 0;
+	default:
+		return DefWindowProcW(hwnd, msg, wParam, lParam);
+	}
+
+}
+int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
+{
+	ListMusicFiles(L"\\\\?\\C:\\Code");
 
 	HRESULT hr = S_OK;
 	if (SUCCEEDED(hr))
 	{
 		hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
 	}
+	
+	
 	auto Data = LoadWaveMMap(L"C:\\Code\\10847939_Ad_Finem_Original_Mix.wav");
 	if (!Data.has_value())
 	{
 		return 1;
 	}
-	
 
 	XAudio2Create(&audio);
 
@@ -164,9 +194,18 @@ int wmain(int argc, wchar_t** argv)
 	}
 
 	bool isStopped = false;
-
+	MSG msg{};
 	while (true)
 	{
+		while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+		{
+			if (msg.message == WM_KEYDOWN)
+			{
+
+				printf("keydown\n");
+			}
+
+		}
 		if (GetAsyncKeyState(VK_ESCAPE))
 		{
 			break;
@@ -201,7 +240,7 @@ int wmain(int argc, wchar_t** argv)
 		master->DestroyVoice();
 	if (audio)
 		audio->Release();
-	
+
 
 	CoUninitialize();
 	return 0;
