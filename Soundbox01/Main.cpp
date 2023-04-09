@@ -1,107 +1,55 @@
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include "Application.h"
+#include "WaveReader.h"
 
-#ifdef _USE_MM_AUDIO
-#include <mmsystem.h>
-#pragma comment(lib, "winmm")
-#else
-#define XAUDIO2_HELPER_FUNCTIONS
-#include <xaudio2.h>
-#pragma comment(lib, "xaudio2")
-#endif
 
-#include <cstdio>
-#include <cstdlib>
-
-#include <string>
-#include <cstdint>
-
-constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
-constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
 
 IXAudio2* audio = nullptr;
-
 IXAudio2MasteringVoice* master = nullptr;
 IXAudio2SourceVoice* voice1 = nullptr;
 
 WAVEFORMATEX WaveFormatEx{};
 
-static uint32_t Wave = 0x45564157; // <evaw>
-static uint32_t Fmt = 0x20746d66; // < tmf> 
-static uint32_t Data = 0x61746164; // <atad> 
+constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
+constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
 
-void PrintWaveFormat(WAVEFORMATEX wf)
+using namespace tretton63;
+
+
+std::optional<WAVEDATA> LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
 {
-	printf("Waveformat\n");
-	printf("Tag %d\n", wf.wFormatTag);
-	printf("Channels %d\n", wf.nChannels);
-	printf("Samples per sec %d\n", wf.nSamplesPerSec);
-	printf("Bits %d\n", wf.wBitsPerSample);
-
-}
-size_t FindChunk(uint32_t Chunk, uint8_t* Data, size_t Offset, size_t FileSize)
-{
-	uint32_t Search{};
-	bool Found{};
-	do {
-		memcpy_s(&Search, sizeof(uint32_t), (uint8_t*)Data + Offset, sizeof(uint32_t));
-		if (Search == Chunk)
-		{
-			Found = true;
-			return Offset;
-		}
-		Offset += sizeof(uint32_t);
-		Search = 0;
-	} while (!Found || Offset > FileSize);
-	return Offset;
-}
-
-template<typename T>
-decltype(auto) ReadChunkAt(uint8_t* Data, size_t Offset, size_t SizeToRead = 0)
-{
-	T Result{};
-	size_t SizeOfResult = sizeof(T);
-	if (SizeToRead != 0)
-	{
-		memcpy_s(&Result, SizeToRead, Data + Offset, SizeToRead);
-	}
-	else
-	{
-		memcpy_s(&Result, SizeOfResult, Data + Offset, SizeOfResult);
-	}
-
-	return Result;
-}
-struct WAVEDATA{
-	size_t WaveSize;
-	void* Location;
-};
-
-WAVEDATA LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
-{
+	
 	WAVEDATA Result{};
-
 	SYSTEM_INFO Si{};
 	GetSystemInfo(&Si);
 
 	HANDLE SoundFile = CreateFile(Filename.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+	DWORD dwError = GetLastError();
+	if (dwError == ERROR_FILE_NOT_FOUND)
+	{
+		OutputDebugString(L"File not found\n");
+		return {};
+	}
+
 	if (SoundFile)
 	{
+		
 		LARGE_INTEGER SoundFileSize{};
 		GetFileSizeEx(SoundFile, &SoundFileSize);
 
 		OutputDebugStringW(L"Opened SoundFile\n");
 		LPVOID View = nullptr;
 		HANDLE SoundFileMapping = CreateFileMapping(SoundFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+		
 		if (SoundFileMapping)
 		{
+			
 			OutputDebugStringW(L"Opened a mapping to file\n");
 
 			View = MapViewOfFile(SoundFileMapping, FILE_MAP_READ, 0, 0, 0);
 			if (View)
 			{
 				OutputDebugString(L"Before\n");
-				size_t WaveChunkOffset = FindChunk(Wave, (uint8_t*)View, 0, SoundFileSize.QuadPart);			
+				size_t WaveChunkOffset = FindChunk(Wave, (uint8_t*)View, 0, SoundFileSize.QuadPart);
 				size_t FmtChunkOffset = FindChunk(Fmt, (uint8_t*)View, WaveChunkOffset, SoundFileSize.QuadPart);
 				uint32_t FmtChunkSize = ReadChunkAt<uint32_t>((uint8_t*)View, FmtChunkOffset + sizeof(uint32_t));
 				size_t DataChunkOffset = FindChunk(Data, (uint8_t*)View, FmtChunkOffset, SoundFileSize.QuadPart);
@@ -140,13 +88,19 @@ WAVEDATA LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\10562542_Liquid
 
 int wmain(int argc, wchar_t** argv)
 {
+
+
 	HRESULT hr = S_OK;
 	if (SUCCEEDED(hr))
 	{
 		hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
 	}
-
-	WAVEDATA Data = LoadWaveMMap();
+	auto Data = LoadWaveMMap(L"C:\\Code\\10847939_Ad_Finem_Original_Mix.wav");
+	if (!Data.has_value())
+	{
+		return 1;
+	}
+	
 
 	XAudio2Create(&audio);
 
@@ -164,14 +118,19 @@ int wmain(int argc, wchar_t** argv)
 
 	if (SUCCEEDED(hr))
 	{
-		if (Data.Location)
+		if (Data->Location)
 		{
 			puts("Try and play the note");
 
 			XAUDIO2_BUFFER XBuffer{};
-			XBuffer.AudioBytes = Data.WaveSize;
+			if (Data->WaveSize <= UINT32_MAX)
+				XBuffer.AudioBytes = static_cast<uint32_t>(Data->WaveSize);
+			else
+			{
+				OutputDebugString(L"Failed to resize the WaveSize\n");
+			}
 			XBuffer.Flags = XAUDIO2_END_OF_STREAM;
-			XBuffer.pAudioData = (LPBYTE)Data.Location;
+			XBuffer.pAudioData = (LPBYTE)Data->Location;
 
 			voice1->SetVolume(1.0f, XAUDIO2_COMMIT_NOW);
 
@@ -233,13 +192,16 @@ int wmain(int argc, wchar_t** argv)
 		Sleep(1);
 	}
 
-
-	if (Data.Location)
-		VirtualFree(Data.Location, 0, MEM_FREE);
+	voice1->FlushSourceBuffers();
+	if (Data.has_value() && Data->Location)
+	{
+		VirtualFree(Data->Location, 0, MEM_FREE);
+	}
 	if (master)
 		master->DestroyVoice();
 	if (audio)
 		audio->Release();
+	
 
 	CoUninitialize();
 	return 0;
