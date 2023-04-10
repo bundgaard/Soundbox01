@@ -128,13 +128,24 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Defer.cpp" />
+    <ClCompile Include="Files.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="StringLayer.cpp" />
     <ClCompile Include="WaveReader.cpp" />
+    <ClCompile Include="Win32Layer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h" />
+    <ClInclude Include="Defer.h" />
+    <ClInclude Include="Files.h" />
     <ClInclude Include="GenerateSound.h" />
+    <ClInclude Include="StringLayer.h" />
     <ClInclude Include="WaveReader.h" />
+    <ClInclude Include="Win32Layer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

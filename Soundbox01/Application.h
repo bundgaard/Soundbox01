@@ -18,3 +18,24 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+
+
+#define Global static
+#define Local static
+#define Scoped static
+
+
+
+#define PauseAndPlayEvent (WM_USER+1)
+
+constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
+constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
+constexpr wchar_t CCLASSNAME[] = L"CSoundBox01Wnd";
+constexpr wchar_t CTITLENAME[] = L"Soundbox 01";
+
+struct PauseAndPlay
+{
+	bool IsPaused;
+};
+
+LRESULT CALLBACK SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

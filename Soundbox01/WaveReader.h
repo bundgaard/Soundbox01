@@ -4,6 +4,8 @@
 #include <mmeapi.h>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
+#include <string>
 
 namespace tretton63
 {
@@ -18,7 +20,7 @@ namespace tretton63
 	};
 
 	size_t FindChunk(uint32_t Chunk, uint8_t* Data, size_t Offset, size_t FileSize);
-
+	
 	template<typename T>
 	decltype(auto) ReadChunkAt(uint8_t* Data, size_t Offset, size_t SizeToRead = 0)
 	{
@@ -36,6 +38,7 @@ namespace tretton63
 		return Result;
 	};
 
-	void PrintWaveFormat(WAVEFORMATEX& wf);
+	void PrintWaveFormat(WAVEFORMATEX* wf);
+	std::optional<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename);
 
 }

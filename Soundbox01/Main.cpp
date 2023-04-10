@@ -3,136 +3,95 @@
 #include <vector>
 #include <string>
 
+#include "Defer.h"
+#include "Win32Layer.h"
 using namespace tretton63;
 
 IXAudio2* audio = nullptr;
 IXAudio2MasteringVoice* master = nullptr;
 IXAudio2SourceVoice* voice1 = nullptr;
 
-WAVEFORMATEX WaveFormatEx{};
 
-constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
-constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
+//TODO(david): Create nice fonts and use them for each child window
 
-std::optional<WAVEDATA> LoadWaveMMap(const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
+Local void
+PlayAndPause_OnClick(HWND self, HWND parent)
 {
+	std::wstring Text{};
+	auto TextLength = GetWindowTextLengthW(self);
+	Text.resize((size_t)TextLength + 1, 0);
+	GetWindowTextW(self, Text.data(), Text.size());
 
-	WAVEDATA Result{};
-
-	HANDLE SoundFile = CreateFile(Filename.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-	DWORD dwError = GetLastError();
-	if (dwError == ERROR_FILE_NOT_FOUND)
+	if (wcscmp(Text.c_str(), L"Play\0") == 0)
 	{
-		OutputDebugString(L"File not found\n");
-		return {};
-	}
+		SetWindowTextW(self, L"Pause");
 
-	if (SoundFile)
+		voice1->Start();
+	}
+	else
 	{
-
-		LARGE_INTEGER SoundFileSize{};
-		GetFileSizeEx(SoundFile, &SoundFileSize);
-
-		OutputDebugStringW(L"Opened SoundFile\n");
-		LPVOID View = nullptr;
-		HANDLE SoundFileMapping = CreateFileMapping(SoundFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
-
-		if (SoundFileMapping)
-		{
-
-			OutputDebugStringW(L"Opened a mapping to file\n");
-
-			View = MapViewOfFile(SoundFileMapping, FILE_MAP_READ, 0, 0, 0);
-			if (View)
-			{
-				OutputDebugString(L"Before\n");
-				size_t WaveChunkOffset = FindChunk(Wave, (uint8_t*)View, 0, SoundFileSize.QuadPart);
-				size_t FmtChunkOffset = FindChunk(Fmt, (uint8_t*)View, WaveChunkOffset, SoundFileSize.QuadPart);
-				uint32_t FmtChunkSize = ReadChunkAt<uint32_t>((uint8_t*)View, FmtChunkOffset + sizeof(uint32_t));
-				size_t DataChunkOffset = FindChunk(Data, (uint8_t*)View, FmtChunkOffset, SoundFileSize.QuadPart);
-				uint32_t DataChunkSize = ReadChunkAt<uint32_t>((uint8_t*)View, DataChunkOffset + sizeof(uint32_t));
-
-				Result.WaveSize = DataChunkSize;
-				WaveFormatEx.cbSize = FmtChunkSize;
-				memcpy_s(&WaveFormatEx, sizeof(WAVEFORMATEX), ((uint8_t*)View + FmtChunkOffset + sizeof(uint32_t) * 2), FmtChunkSize); // size of the size of the formatlength (uint32_t) and skipping it +4
-
-				printf("Fmt offset %zd\n", FmtChunkOffset);
-				printf("Fmt size %u\n", FmtChunkSize);
-				printf("Data offset %zd\n", DataChunkOffset);
-				printf("Data size %u\n", DataChunkSize);
-				PrintWaveFormat(WaveFormatEx);
-
-				Result.Location = VirtualAlloc(nullptr, DataChunkSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-				if (Result.Location)
-				{
-					OutputDebugString(L"Allocate music buffer\n");
-					printf("Allocated soundbuffer %zd\n", DataChunkOffset + sizeof(uint32_t) * 2);
-					memcpy_s(Result.Location, DataChunkSize, (uint8_t*)View + DataChunkOffset + sizeof(uint32_t) * 2, DataChunkSize);
-				}
-			}
-		}
-
-		if (View)
-			UnmapViewOfFile(View);
-		if (SoundFileMapping)
-			CloseHandle(SoundFileMapping);
-		if (SoundFile)
-			CloseHandle(SoundFile);
+		SetWindowTextW(self, L"Play");
+		voice1->Stop();
 	}
-	return Result;
 }
 
-std::vector<std::wstring> ListMusicFiles(std::wstring const& Folder)
+LRESULT CALLBACK
+SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	std::vector<std::wstring> Files;
-	WIN32_FIND_DATAW Block{};
-	std::wstring Extension = Folder;
-	Extension += L"\\*.wav";
+	Scoped HWND PauseAndPlayButton;
 
-	HANDLE FindHandle = FindFirstFileW(Extension.c_str(), &Block);
-	// TODO(david): add error checking
-	if (FindHandle)
-	{
-		do {
-			Files.push_back(Block.cFileName);
-		} while (FindNextFileW(FindHandle, &Block));
-		FindClose(FindHandle);
-	}
-
-	return Files;
-}
-static LRESULT CALLBACK SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
 	switch (msg)
 	{
 	case WM_CREATE:
 	{
-
+		PauseAndPlayButton = CreateWindow(L"BUTTON", L"Play", WS_VISIBLE | WS_CHILD, 10, 10, 100, 25, hwnd, (HMENU)PauseAndPlayEvent, GetModuleHandle(nullptr), nullptr);
+	}
+	return 0;
+	case WM_COMMAND:
+	{
+		switch (wParam)
+		{
+		case PauseAndPlayEvent:
+		{
+			PlayAndPause_OnClick(PauseAndPlayButton, hwnd);
+		}
+		break;
+		}
+	}
+	return 0;
+	case WM_DESTROY:
+	{
+		PostQuitMessage(0);
 	}
 	return 0;
 	default:
 		return DefWindowProcW(hwnd, msg, wParam, lParam);
 	}
-
 }
+
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
-	ListMusicFiles(L"\\\\?\\C:\\Code");
-
 	HRESULT hr = S_OK;
-	if (SUCCEEDED(hr))
+	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
+
+	if (!Win32RegisterClass(hInst))
 	{
-		hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+		return 1;
 	}
-	
-	
-	auto Data = LoadWaveMMap(L"C:\\Code\\10847939_Ad_Finem_Original_Mix.wav");
+
+	Local WAVEFORMATEX WaveFormatEx{};
+
+	auto Data = LoadWaveMMap(&WaveFormatEx, L"C:\\Code\\10847939_Ad_Finem_Original_Mix.wav");
 	if (!Data.has_value())
 	{
 		return 1;
 	}
 
 	XAudio2Create(&audio);
+	if (SUCCEEDED(hr))
+	{
+		hr = ComInit.Get();
+	}
 
 	if (SUCCEEDED(hr))
 	{
@@ -170,18 +129,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 		}
 	}
 
-
-	if (SUCCEEDED(hr))
-	{
-		OutputDebugString(L"Voice1 Start\n");
-		hr = voice1->Start(0);
-	}
-
-	if (SUCCEEDED(hr))
-	{
-		OutputDebugString(L"Playing note\n");
-	}
-
 	if (FAILED(hr))
 	{
 		DWORD dwError = GetLastError();
@@ -193,55 +140,46 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 
 	}
 
-	bool isStopped = false;
-	MSG msg{};
-	while (true)
+	HWND hwnd = CreateWindowEx(
+		WS_EX_OVERLAPPEDWINDOW,
+		CCLASSNAME,
+		CTITLENAME,
+		WS_OVERLAPPEDWINDOW,
+		CW_USEDEFAULT,
+		CW_USEDEFAULT,
+		CW_USEDEFAULT,
+		CW_USEDEFAULT,
+		nullptr,
+		nullptr,
+		hInst,
+		nullptr);
+	if (hwnd == nullptr)
 	{
-		while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
-		{
-			if (msg.message == WM_KEYDOWN)
-			{
+		OutputDebugString(L"CreateWindowEx failed\n");
+		return 1;
+	}
+	UpdateWindow(hwnd);
+	ShowWindow(hwnd, nCmdShow);
 
-				printf("keydown\n");
-			}
 
-		}
-		if (GetAsyncKeyState(VK_ESCAPE))
-		{
-			break;
-		}
-		if (GetAsyncKeyState(VK_SPACE))
-		{
-			isStopped = true;
-		}
 
-		if (GetAsyncKeyState(VK_END))
-		{
-			isStopped = false;
-		}
-
-		if (isStopped)
-		{
-			voice1->Stop();
-		}
-		else
-		{
-			voice1->Start(XAUDIO2_COMMIT_NOW);
-		}
-		Sleep(1);
+	MSG msg{};
+	while (GetMessageW(&msg, nullptr, 0, 0) > 0)
+	{
+		TranslateMessage(&msg);
+		DispatchMessageW(&msg);
 	}
 
 	voice1->FlushSourceBuffers();
 	if (Data.has_value() && Data->Location)
 	{
 		VirtualFree(Data->Location, 0, MEM_FREE);
+		Data->Location = nullptr;
 	}
 	if (master)
 		master->DestroyVoice();
 	if (audio)
 		audio->Release();
-
-
-	CoUninitialize();
+	OutputDebugString(L"Should have emptied all now\n");
 	return 0;
 }
