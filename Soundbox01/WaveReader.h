@@ -38,7 +38,7 @@ namespace tretton63
 		return Result;
 	};
 
-	void PrintWaveFormat(WAVEFORMATEX* wf);
+	void PrintWaveFormat(WAVEFORMATEX* wf, uint32_t WaveDataSize);
 	std::optional<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename);
 
 }

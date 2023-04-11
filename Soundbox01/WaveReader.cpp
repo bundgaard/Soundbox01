@@ -2,9 +2,6 @@
 
 namespace tretton63
 {
-
-
-
 	constexpr int Convert(const char* szText)
 	{
 		int result{};
@@ -33,13 +30,27 @@ namespace tretton63
 		return Offset;
 	}
 
-	void PrintWaveFormat(WAVEFORMATEX* const  wf)
+	void PrintWaveFormat(WAVEFORMATEX* const  wf, uint32_t WaveDataSize)
 	{
-		printf("Waveformat\n");
-		printf("Tag %d\n", wf->wFormatTag);
-		printf("Channels %d\n", wf->nChannels);
-		printf("Samples per sec %d\n", wf->nSamplesPerSec);
-		printf("Bits %d\n", wf->wBitsPerSample);
+		OutputDebugStringW(L"Waveformat\n");
+		wchar_t Buffer[64] = { 0 };
+		wsprintf(Buffer, L"Tag %d\n", wf->wFormatTag);
+		OutputDebugStringW(Buffer);
+		memset(Buffer, 0, sizeof(wchar_t) * 64);
+		wsprintf(Buffer, L"Channels %d\n", wf->nChannels);
+		OutputDebugStringW(Buffer);
+		memset(Buffer, 0, sizeof(wchar_t) * 64);
+		wsprintf(Buffer, L"Samples per sec %d\n", wf->nSamplesPerSec);
+		OutputDebugStringW(Buffer);
+		memset(Buffer, 0, sizeof(wchar_t) * 64);
+		wsprintf(Buffer, L"Bits %d\n", wf->wBitsPerSample);
+		OutputDebugStringW(Buffer);
+		memset(Buffer, 0, sizeof(wchar_t) * 64);
+		wsprintf(Buffer, L"Average bytes per sec %d\n", wf->nAvgBytesPerSec);
+		OutputDebugStringW(Buffer);
+		memset(Buffer, 0, sizeof(wchar_t) * 64);
+		wsprintf(Buffer, L"Minutes: %d\n", WaveDataSize / wf->nAvgBytesPerSec / 60);
+		OutputDebugStringW(Buffer);
 	}
 
 	std::optional<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
@@ -88,7 +99,7 @@ namespace tretton63
 					printf("Fmt size %u\n", FmtChunkSize);
 					printf("Data offset %zd\n", DataChunkOffset);
 					printf("Data size %u\n", DataChunkSize);
-					PrintWaveFormat(WaveFormatEx);
+					PrintWaveFormat(WaveFormatEx, DataChunkSize);
 
 					Result.Location = VirtualAlloc(nullptr, DataChunkSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 					if (Result.Location)

@@ -15,4 +15,38 @@ namespace tretton63
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		return RegisterClassEx(&wc);
 	}
+
+	HFONT Win32CreateFont(std::wstring const& Fontface, int FontSize)
+	{
+		HFONT Font = CreateFontW(
+			FontSize,
+			0,
+			0,
+			0,
+			FW_NORMAL,
+			false,
+			false,
+			false,
+			DEFAULT_CHARSET,
+			OUT_DEFAULT_PRECIS,
+			CLIP_DEFAULT_PRECIS,
+			DEFAULT_QUALITY,
+			DEFAULT_PITCH,
+			Fontface.c_str());
+		return Font;
+	}
+
+	HWND Win32CreateWindow(std::wstring const& Title, int X, int Y, int Width, int Height, HINSTANCE hInst)
+	{
+		return CreateWindowEx(
+			WS_EX_OVERLAPPEDWINDOW,
+			CCLASSNAME,
+			Title.c_str(),
+			WS_OVERLAPPEDWINDOW,
+			X, Y, Width, Height,
+			nullptr,
+			nullptr,
+			hInst,
+			nullptr);
+	}
 }

@@ -11,13 +11,8 @@
 #pragma comment(lib, "xaudio2")
 #endif
 
-#include <cstdio>
-#include <cstdlib>
-
 #include <string>
-#include <cstdint>
-#include <memory>
-#include <optional>
+
 
 
 #define Global static
@@ -26,7 +21,8 @@
 
 
 
-#define PauseAndPlayEvent (WM_USER+1)
+#define PauseAndPlayEvent     (WM_USER+1)
+#define VoiceOneGetStateEvent (WM_USER+2)
 
 constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
 constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
