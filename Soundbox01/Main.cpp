@@ -38,14 +38,10 @@ Global HWND MusicFile;
 Global HWND SoundProgress;
 
 Global HFONT ButtonFont;
+
+
 Global WAVEFORMATEX WaveFormatEx;
 std::optional<WAVEDATA> Data;
-struct EventParams {
-	HANDLE Event;
-	bool shouldContinue;
-	size_t Size;
-	void* Location;
-};
 
 Global HANDLE hEvent = nullptr;
 Global PTP_WORK WorkItem = nullptr;
@@ -55,59 +51,34 @@ void NTAPI TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK W
 	wchar_t Buf[64] = { 0 };
 	wsprintf(Buf, L"Starting new work\n");
 	OutputDebugStringW(Buf);
+	memset(Buf, 0, sizeof(wchar_t) * 64);
+	wsprintf(Buf, L"WaveFormatEx information %d\n", WaveFormatEx.nChannels);
+	OutputDebugString(Buf);
+}
 
-	Sleep(rand() % 255);
+std::optional<std::wstring> Win32Caption(HWND hwnd)
+{
+	std::wstring Text{};
+	auto TextLength = GetWindowTextLengthW(MusicFile);	
+	if (TextLength == 0)
+	{
+		DWORD dwError = GetLastError();
+		if (dwError != 0x0)
+		{
+			// TODO: add more error handling
+			OutputDebugString(L"failed to get the text length from window control\n");
+			return {};
+		}
+	}
+
+	Text.resize((size_t)TextLength + 1, L'\0');
+	GetWindowTextW(hwnd, Text.data(), Text.size());
+	return Text;
 }
 
 Local void
 PlayAndPause_OnClick(HWND self, HWND parent)
 {
-	{
-		
-		HRESULT hr = S_OK;
-		auto Data = LoadWaveMMap(&WaveFormatEx, L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav");
-		if (Data.has_value())
-		{
-			if (Data->Location)
-			{
-
-				SubmitThreadpoolWork(WorkItem);
-				if (SUCCEEDED(hr))
-				{
-					OutputDebugString(L"CreateSourceVoice\n");
-					hr = audio->CreateSourceVoice(&voice1, &WaveFormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
-				}
-				puts("Try and play the note");
-
-				XAUDIO2_BUFFER XBuffer{};
-				if (Data->WaveSize <= UINT32_MAX)
-					XBuffer.AudioBytes = static_cast<uint32_t>(Data->WaveSize);
-				else
-				{
-					OutputDebugString(L"Failed to resize the WaveSize\n");
-				}
-				XBuffer.Flags = XAUDIO2_END_OF_STREAM;
-				XBuffer.pAudioData = (LPBYTE)Data->Location;
-
-				voice1->SetVolume(1.0f, XAUDIO2_COMMIT_NOW);
-
-				hr = voice1->SubmitSourceBuffer(&XBuffer);
-			}
-			Data = std::move(Data);
-		}
-
-		if (FAILED(hr))
-		{
-			DWORD dwError = GetLastError();
-			if (dwError != 0x00)
-			{
-				printf("0x%x\n", dwError);
-				printf("failed to create Voice\n");
-			}
-		}
-
-	}
-
 	std::wstring Text{};
 	auto TextLength = GetWindowTextLengthW(self);
 	Text.resize((size_t)TextLength + 1, 0);
@@ -117,7 +88,56 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 	if (wcscmp(Text.c_str(), L"Play\0") == 0)
 	{
 		SetWindowTextW(self, L"Pause");
+		{
 
+			HRESULT hr = S_OK;
+			auto Text = Win32Caption(MusicFile);
+			if (voice1 == nullptr && Text.has_value())
+			{
+				auto Data = LoadWaveMMap(&WaveFormatEx, Text->c_str());
+				if (Data.has_value())
+				{
+					if (Data->Location)
+					{						
+						SubmitThreadpoolWork(WorkItem);
+						if (SUCCEEDED(hr))
+						{
+							OutputDebugString(L"CreateSourceVoice\n");
+							hr = audio->CreateSourceVoice(&voice1, &WaveFormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
+						}
+						OutputDebugStringW(L"Try and play the note");
+
+						XAUDIO2_BUFFER XBuffer{};
+						if (Data->WaveSize <= UINT32_MAX)
+							XBuffer.AudioBytes = static_cast<uint32_t>(Data->WaveSize);
+						else
+						{
+							OutputDebugString(L"Failed to resize the WaveSize\n");
+						}
+						XBuffer.Flags = XAUDIO2_END_OF_STREAM;
+						XBuffer.pAudioData = (LPBYTE)Data->Location;
+
+						voice1->SetVolume(1.0f, XAUDIO2_COMMIT_NOW);
+
+						hr = voice1->SubmitSourceBuffer(&XBuffer);
+					}
+					Data = std::move(Data);
+				}
+
+				if (FAILED(hr))
+				{
+					DWORD dwError = GetLastError();
+					if (dwError != 0x00)
+					{
+						printf("0x%x\n", dwError);
+						printf("failed to create Voice\n");
+					}
+				}
+
+			}
+			
+		}
+		
 		voice1->Start();
 	}
 	else
@@ -224,6 +244,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 	WorkItem = CreateThreadpoolWork(TaskHandler, nullptr, nullptr);
+	if (WorkItem == nullptr)
+	{
+		OutputDebugStringW(L"Failed to create work item\n");
+		return -2;
+	}
 
 	if (FAILED(hr))
 	{
