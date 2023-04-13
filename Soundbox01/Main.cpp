@@ -38,7 +38,7 @@ Global HWND MusicFile;
 Global HWND SoundProgress;
 
 Global HFONT ButtonFont;
-
+Global WAVEFORMATEX WaveFormatEx;
 std::optional<WAVEDATA> Data;
 struct EventParams {
 	HANDLE Event;
@@ -48,18 +48,22 @@ struct EventParams {
 };
 
 Global HANDLE hEvent = nullptr;
+Global PTP_WORK WorkItem = nullptr;
 
-[[noreturn]]
-DWORD ThreadProc(LPVOID Arguments)
+void NTAPI TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work)
 {
+	wchar_t Buf[64] = { 0 };
+	wsprintf(Buf, L"Starting new work\n");
+	OutputDebugStringW(Buf);
 
+	Sleep(rand() % 255);
 }
 
 Local void
 PlayAndPause_OnClick(HWND self, HWND parent)
 {
 	{
-		Local WAVEFORMATEX WaveFormatEx{};
+		
 		HRESULT hr = S_OK;
 		auto Data = LoadWaveMMap(&WaveFormatEx, L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav");
 		if (Data.has_value())
@@ -67,13 +71,7 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 			if (Data->Location)
 			{
 
-				EventParams Params{};
-				Params.Event = hEvent;
-				Params.Location = Data->Location;
-				Params.Size = Data->WaveSize;
-
-				CreateThread(nullptr, 0, &ThreadProc, &Params, 0, nullptr);
-
+				SubmitThreadpoolWork(WorkItem);
 				if (SUCCEEDED(hr))
 				{
 					OutputDebugString(L"CreateSourceVoice\n");
@@ -225,6 +223,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 {
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
+	WorkItem = CreateThreadpoolWork(TaskHandler, nullptr, nullptr);
 
 	if (FAILED(hr))
 	{
@@ -256,6 +255,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	}
 
 	DestroyWindow(hwnd);
-
+	CloseThreadpoolWork(WorkItem);
 	return 0;
 }
