@@ -1,4 +1,5 @@
 #include "Win32Layer.h"
+
 namespace tretton63
 {
 	ATOM Win32RegisterClass(HINSTANCE hInst)
@@ -48,5 +49,37 @@ namespace tretton63
 			nullptr,
 			hInst,
 			nullptr);
+	}
+
+	std::optional<std::wstring> Win32Caption(HWND hwnd)
+	{
+		std::wstring Text{};
+		auto TextLength = GetWindowTextLengthW(hwnd);
+		if (TextLength == 0)
+		{
+			DWORD dwError = GetLastError();
+			if (dwError != 0x0)
+			{
+				// TODO: add more error handling
+				OutputDebugString(L"failed to get the text length from window control\n");
+				return std::nullopt;
+			}
+		}
+
+		Text.resize((size_t)TextLength + 1, L'\0');
+		GetWindowTextW(hwnd, Text.data(), Text.size());
+		return Text;
+	}
+
+	HWND
+	Win32CreateButton(HWND Parent, std::wstring const& Caption, int EventId, int X, int Y, int Width, int Height)
+	{
+		return CreateWindow(L"BUTTON", Caption.c_str(),
+			WS_VISIBLE | WS_CHILD,
+			X, Y, Width, Height, Parent,
+			(HMENU)EventId,
+			GetModuleHandle(nullptr),
+			nullptr);
+
 	}
 }

@@ -29,3 +29,16 @@ public:
 	Defer& operator=(Defer&) = delete;
 };
 
+class Foo
+{
+public:
+	Foo()
+	{
+		OutputDebugStringW(L"Foo constructor\n");
+	}
+
+	~Foo()
+	{
+		OutputDebugStringW(L"Foo destructor\n");
+	}
+};
