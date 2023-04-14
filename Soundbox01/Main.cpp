@@ -1,5 +1,6 @@
 #include "Application.h"
 #include "WaveReader.h"
+#include <windowsx.h>
 
 #include <vector>
 #include <sstream>
@@ -166,17 +167,24 @@ VoiceOne_OnClick(HWND self)
 	Out << L"Samples played: " << state.SamplesPlayed << "\n" << L"Buffers queued: " << state.BuffersQueued << "\n";
 	OutputDebugString(Out.str().c_str());
 }
+struct WAVFILE {
+	std::wstring Path;
+};
+
+std::vector<WAVFILE> VectorOfFiles;
 
 Local void
 ReadFilesIntoList(HWND EditControl /*MusicFile*/, HWND List/* MusicList*/)
 {
 	auto Path = Win32Caption(EditControl);
-	OutputDebugStringW(Path->c_str());
 	WIN32_FIND_DATAW FindBlock{};
 	if (Path.has_value())
 	{
-		std::wstring Foo = Path.value();
+		std::wstring Foo{};
+		Foo += L"\\\\?\\";
+		Foo += Path->c_str();		
 		Foo += L"\\*";
+	
 		HANDLE MyFile = FindFirstFileW(Foo.c_str(), &FindBlock);
 		if (MyFile == nullptr)
 		{
@@ -191,7 +199,11 @@ ReadFilesIntoList(HWND EditControl /*MusicFile*/, HWND List/* MusicList*/)
 				std::wstring Filename{ FindBlock.cFileName };
 				if (Filename.ends_with(L".wav\0"))
 				{
-					OutputDebugStringW(FindBlock.cFileName);
+					ListBox_ResetContent(List);
+					OutputDebugStringW(Filename.c_str());
+					VectorOfFiles.push_back(WAVFILE{ .Path = (Foo + Filename) });
+					// TODO(fix resize);
+					SendMessage(List, LB_ADDSTRING, (WPARAM) 0, (LPARAM)Filename.c_str());
 				}
 
 
@@ -250,7 +262,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), MusicLocationCaption->size(), &S);
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
-		auto MusicList = CreateWindow(L"listbox", L"", WS_VISIBLE | WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
+		MusicList = CreateWindow(L"listbox", L"", WS_VISIBLE | WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
 		SendMessage(MusicList, LB_ADDSTRING, (WPARAM)0,(LPARAM)L"Foobar");
 
 
