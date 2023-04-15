@@ -1,21 +1,42 @@
 #include "Files.h"
-
-std::vector<std::wstring> ListMusicFiles(std::wstring const& Folder)
+namespace tretton63
 {
-	std::vector<std::wstring> Files;
-	WIN32_FIND_DATAW Block{};
-	std::wstring Extension = Folder;
-	Extension += L"\\*.wav";
-
-	HANDLE FindHandle = FindFirstFileW(Extension.c_str(), &Block);
-	// TODO(david): add error checking
-	if (FindHandle)
+	// TODO: should move it into a thread to not block UI if the folder is too big.
+	std::vector<std::wstring>
+		ReadFilesIntoList(std::wstring const& Path)
 	{
-		do {
-			Files.push_back(Block.cFileName);
-		} while (FindNextFileW(FindHandle, &Block));
-		FindClose(FindHandle);
-	}
+		WIN32_FIND_DATAW FindBlock{};
+		std::vector<std::wstring> Result{};
+		std::wstring Foo{};
+		Foo += L"\\\\?\\";
+		Foo += Path.c_str();
+		Foo += L"\\*";
 
-	return Files;
+		HANDLE MyFile = FindFirstFileW(Foo.c_str(), &FindBlock);
+		if (MyFile == nullptr)
+		{
+			DWORD dwError = GetLastError();
+			wchar_t Buf[64] = { 0 };
+			wsprintf(Buf, L"Error %x\n", dwError);
+			OutputDebugString(Buf);
+		}
+		else
+		{
+			do {
+				std::wstring Filename{ FindBlock.cFileName };
+				if (Filename.ends_with(L".wav\0"))
+				{
+					OutputDebugStringW(Filename.c_str());
+					std::wstring NewPath{};
+					NewPath += Path.substr(0,Path.size()-1);
+					NewPath += L"\\";
+					NewPath += Filename;
+					Result.push_back(NewPath);
+					OutputDebugStringW(NewPath.c_str());
+					OutputDebugStringW(L"\n");
+				}
+			} while (FindNextFileW(MyFile, &FindBlock));
+		}
+		return Result;
+	}
 }

@@ -5,4 +5,7 @@
 
 #include <vector>
 #include <string>
-std::vector<std::wstring> ListMusicFiles(std::wstring const& Folder);
+namespace tretton63
+{
+	std::vector<std::wstring> ReadFilesIntoList(std::wstring const& Path);
+}

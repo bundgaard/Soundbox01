@@ -6,6 +6,7 @@
 #include <sstream>
 #include <memory>
 #include <optional>
+#include <iostream> 
 
 #include <cstdio>
 #include <cstdlib>
@@ -15,6 +16,8 @@
 
 #include "Defer.h"
 #include "Win32Layer.h"
+#include "Files.h"
+
 
 /*
 Chart
@@ -38,6 +41,17 @@ Lines
 
 // Comment on a single line
 
+
+consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
+{
+	
+	int R = (ColorHex >> 24) & 0xff;
+	int G = (ColorHex >> 16) & 0xff;
+	int B = (ColorHex >> 8) & 0xff;
+	return RGB(R, G, B);
+}
+
+static_assert(to_rgb(0x003600ff) == 0x003600);
 
 using namespace tretton63;
 
@@ -167,54 +181,7 @@ VoiceOne_OnClick(HWND self)
 	Out << L"Samples played: " << state.SamplesPlayed << "\n" << L"Buffers queued: " << state.BuffersQueued << "\n";
 	OutputDebugString(Out.str().c_str());
 }
-struct WAVFILE {
-	std::wstring Path;
-};
 
-std::vector<WAVFILE> VectorOfFiles;
-
-Local void
-ReadFilesIntoList(HWND EditControl /*MusicFile*/, HWND List/* MusicList*/)
-{
-	auto Path = Win32Caption(EditControl);
-	WIN32_FIND_DATAW FindBlock{};
-	if (Path.has_value())
-	{
-		std::wstring Foo{};
-		Foo += L"\\\\?\\";
-		Foo += Path->c_str();		
-		Foo += L"\\*";
-	
-		HANDLE MyFile = FindFirstFileW(Foo.c_str(), &FindBlock);
-		if (MyFile == nullptr)
-		{
-			DWORD dwError = GetLastError();
-			wchar_t Buf[64] = { 0 };
-			wsprintf(Buf, L"Error %x\n", dwError);
-			OutputDebugString(Buf);
-		}
-		else
-		{
-			do {
-				std::wstring Filename{ FindBlock.cFileName };
-				if (Filename.ends_with(L".wav\0"))
-				{
-					ListBox_ResetContent(List);
-					OutputDebugStringW(Filename.c_str());
-					VectorOfFiles.push_back(WAVFILE{ .Path = (Foo + Filename) });
-					// TODO(fix resize);
-					SendMessage(List, LB_ADDSTRING, (WPARAM) 0, (LPARAM)Filename.c_str());
-				}
-
-
-			} while (FindNextFileW(MyFile, &FindBlock));
-
-		}
-
-	}
-	
-
-}
 
 
 LRESULT CALLBACK
@@ -263,15 +230,13 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
 		MusicList = CreateWindow(L"listbox", L"", WS_VISIBLE | WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
-		SendMessage(MusicList, LB_ADDSTRING, (WPARAM)0,(LPARAM)L"Foobar");
-
-
+		
 		SendMessage(PauseAndPlayButton, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
 		SendMessage(VoiceOneGetState, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
 		SendMessage(MusicFile, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
 		SendMessage(LoadFilesToList, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
 		SendMessage(MusicList, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-
+		
 		if (SUCCEEDED(hr))
 		{
 			hr = XAudio2Create(&audio);
@@ -308,7 +273,37 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 		case (WM_USER + 4):
 		{
-			ReadFilesIntoList(MusicFile, MusicList);
+			auto Path = Win32Caption(MusicFile);
+			if (Path.has_value())
+			{
+				std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
+				ListBox_ResetContent(MusicList);
+				HDC hdc = GetDC(MusicList);
+				int LongestWidth = 0;
+				int LongestHeight = 0;
+				for (auto const& Filename : Files)
+				{
+					SIZE TextSize{};
+					SendMessage(MusicList, LB_ADDSTRING, (WPARAM)0, (LPARAM)Filename.c_str());
+					GetTextExtentPoint32W(hdc, Filename.c_str(), Filename.size(), &TextSize);
+					if (TextSize.cx > LongestWidth)
+					{
+						LongestWidth = TextSize.cx;
+					}
+					LongestHeight += TextSize.cy;
+				}
+				
+				
+				ReleaseDC(MusicList, hdc);
+				
+				RECT MusicListRect{};
+				GetWindowRect(MusicList, &MusicListRect); 
+				MusicListRect.right = LongestWidth;
+				MusicListRect.bottom = LongestHeight;
+				SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
+
+			}
+
 		}
 		break;
 		}
@@ -359,8 +354,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 		OutputDebugString(L"Failed to do CoInitialize\n");
 		return 1;
 	}
-
-	if (!Win32RegisterClass(hInst))
+	HBRUSH hbrBackground = CreateSolidBrush(to_rgb(0x003600ff));
+	if (!Win32RegisterClass(hInst, hbrBackground))
 	{
 		return 1;
 	}

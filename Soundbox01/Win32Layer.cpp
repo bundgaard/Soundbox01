@@ -2,13 +2,13 @@
 
 namespace tretton63
 {
-	ATOM Win32RegisterClass(HINSTANCE hInst)
+	ATOM Win32RegisterClass(HINSTANCE hInst, HBRUSH hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1))
 	{
 		WNDCLASSEX wc{};
 		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.hInstance = hInst;
 		wc.lpszClassName = CCLASSNAME;
-		wc.hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1);
+		wc.hbrBackground = hbrBackground;
 		wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
 		wc.hIconSm = wc.hIcon;
 		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
