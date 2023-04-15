@@ -109,17 +109,25 @@ Local void
 PlayAndPause_OnClick(HWND self, HWND parent)
 {
 	auto Text = Win32Caption(self);
-
-	if (Text.has_value() && wcscmp(Text->c_str(), L"Play\0") == 0)
+	auto Index = ListBox_GetCurSel(MusicList);
+	auto Selection = ListBox_GetCurSel(MusicList);
+	// TODO: figure out how to release the buffer and reload...
+	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
 	{
+		wchar_t Buf[255] = { 0 };
+		ListBox_GetText(MusicList, Index, Buf);
+
 		SetWindowTextW(self, L"Pause");
 		{
 
 			HRESULT hr = S_OK;
-			auto Text = Win32Caption(MusicFile);
-			if (voice1 == nullptr && Text.has_value())
+			// Ask for current selection of MusicList
+			
+			OutputDebugStringW(L"");
+			
+			if (voice1 == nullptr)
 			{
-				auto Data = LoadWaveMMap(&WaveFormatEx, Text->c_str());
+				auto Data = LoadWaveMMap(&WaveFormatEx, Buf);
 				if (Data.has_value())
 				{
 
@@ -284,7 +292,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				for (auto const& Filename : Files)
 				{
 					SIZE TextSize{};
-					SendMessage(MusicList, LB_ADDSTRING, (WPARAM)0, (LPARAM)Filename.c_str());
+					
+					ListBox_AddString(MusicList, Filename.c_str());
 					GetTextExtentPoint32W(hdc, Filename.c_str(), Filename.size(), &TextSize);
 					if (TextSize.cx > LongestWidth)
 					{
@@ -299,11 +308,9 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				RECT MusicListRect{};
 				GetWindowRect(MusicList, &MusicListRect); 
 				MusicListRect.right = LongestWidth;
-				MusicListRect.bottom = LongestHeight;
+				MusicListRect.bottom = LongestHeight < 50 ? LongestHeight * 2 : LongestHeight;
 				SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
-
 			}
-
 		}
 		break;
 		}
