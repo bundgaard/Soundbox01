@@ -294,6 +294,28 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
+
+		// Slider background
+			RECT SliderBackground{ 150, 10, 200, 128 };
+		HBRUSH hBackground = CreateSolidBrush(RGB(240, 240, 240));
+		FillRect(hdc, &SliderBackground, hBackground);
+		DeleteBrush(hBackground);
+
+
+			// Slider Trackline
+		auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 2;
+		MoveToEx(hdc, SliderMiddleX, SliderBackground.top, nullptr);
+		LineTo(hdc, SliderMiddleX, SliderBackground.bottom);
+
+		SetBkMode(hdc, TRANSPARENT);
+			// Slider max at top
+		DrawTextW(hdc, L"Max\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
+			// Slider min at bottom
+
+			// Slider thumb
+
+
+
 		EndPaint(hwnd, &ps);
 	}
 	return 0;

@@ -45,7 +45,7 @@ public:
 	}
 
 private:
-	void OnPaint(HDC hdc)
+	void OnPaint(/*HDC hdc*/)
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(m_hwnd, &ps);
