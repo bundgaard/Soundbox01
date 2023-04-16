@@ -132,6 +132,7 @@
     <ClCompile Include="Defer.cpp" />
     <ClCompile Include="Files.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Slider.cpp" />
     <ClCompile Include="StringLayer.cpp" />
     <ClCompile Include="WaveReader.cpp" />
     <ClCompile Include="Win32Layer.cpp" />
@@ -142,6 +143,7 @@
     <ClInclude Include="Defer.h" />
     <ClInclude Include="Files.h" />
     <ClInclude Include="GenerateSound.h" />
+    <ClInclude Include="Slider.h" />
     <ClInclude Include="StringLayer.h" />
     <ClInclude Include="WaveReader.h" />
     <ClInclude Include="Win32Layer.h" />

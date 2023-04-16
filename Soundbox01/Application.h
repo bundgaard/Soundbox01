@@ -11,6 +11,11 @@
 #pragma comment(lib, "xaudio2")
 #endif
 
+#include <windowsx.h>
+#include <CommCtrl.h>
+#pragma comment(lib, "comctl32")
+#include <atlbase.h>
+
 #include <string>
 
 

@@ -1,6 +1,5 @@
 #include "Application.h"
 #include "WaveReader.h"
-#include <windowsx.h>
 
 #include <vector>
 #include <sstream>
@@ -11,8 +10,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
-#include <CommCtrl.h>
-#pragma comment(lib, "comctl32")
+
 
 #include "Defer.h"
 #include "Win32Layer.h"
@@ -32,10 +30,10 @@ Another thing to think about is how to limit the time line to our width, Excel p
 
 */
 
-/* A 
-Comment 
-On 
-Multiple 
+/* A
+Comment
+On
+Multiple
 Lines
 */
 
@@ -44,7 +42,7 @@ Lines
 
 consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
 {
-	
+
 	int R = (ColorHex >> 24) & 0xff;
 	int G = (ColorHex >> 16) & 0xff;
 	int B = (ColorHex >> 8) & 0xff;
@@ -55,9 +53,9 @@ static_assert(to_rgb(0x003600ff) == 0x003600);
 
 using namespace tretton63;
 
-Global IXAudio2* audio = nullptr;
-Global IXAudio2MasteringVoice* master = nullptr;
-Global IXAudio2SourceVoice* voice1 = nullptr;
+Global CComPtr<IXAudio2> audio = nullptr;
+Global IXAudio2MasteringVoice* master;
+Global IXAudio2SourceVoice* voice1;
 
 Global HWND PauseAndPlayButton;
 Global HWND VoiceOneGetState;
@@ -65,7 +63,7 @@ Global HWND MusicFile;
 Global HWND SoundProgress;
 Global HWND LoadFilesToList;
 Global HWND MusicList;
-
+Global HWND VolumeFader;
 Global HFONT ButtonFont;
 
 Global WAVEFORMATEX WaveFormatEx;
@@ -75,7 +73,6 @@ std::optional<WAVEDATA> g_Data;
 Global HANDLE hEvent = nullptr;
 Global PTP_WORK WorkItem = nullptr;
 Global bool MusicLoaded;
-std::shared_ptr<Foo> g_Foo;
 
 void NTAPI TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work)
 {
@@ -111,6 +108,7 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 	auto Text = Win32Caption(self);
 	auto Index = ListBox_GetCurSel(MusicList);
 	auto Selection = ListBox_GetCurSel(MusicList);
+	Local int PreviousIndex;
 	// TODO: figure out how to release the buffer and reload...
 	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
 	{
@@ -122,12 +120,13 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 
 			HRESULT hr = S_OK;
 			// Ask for current selection of MusicList
-			
+
 			OutputDebugStringW(L"");
-			
+
 			if (voice1 == nullptr)
 			{
 				auto Data = LoadWaveMMap(&WaveFormatEx, Buf);
+
 				if (Data.has_value())
 				{
 
@@ -183,13 +182,26 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 Local void
 VoiceOne_OnClick(HWND self)
 {
-	XAUDIO2_VOICE_STATE state{};
-	voice1->GetState(&state, 0);
-	std::wstringstream Out{};
-	Out << L"Samples played: " << state.SamplesPlayed << "\n" << L"Buffers queued: " << state.BuffersQueued << "\n";
-	OutputDebugString(Out.str().c_str());
+	if (MusicLoaded)
+	{
+		XAUDIO2_VOICE_STATE state{};
+		voice1->GetState(&state, 0);
+		std::wstringstream Out{};
+		Out << L"Samples played: " << state.SamplesPlayed << "\n" << L"Buffers queued: " << state.BuffersQueued << "\n";
+		OutputDebugString(Out.str().c_str());
+	}
+
 }
 
+Local void Win32SetFont(HWND hwnd, HFONT Font)
+{
+	SendMessage(hwnd, WM_SETFONT, (WPARAM)Font, 0);
+}
+
+Local SIZE Win32TextMeasure()
+{
+	return {};
+}
 
 
 LRESULT CALLBACK
@@ -225,26 +237,46 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			GetModuleHandleW(nullptr),
 			nullptr);
 		posY += Height;
-		
-		
+
+
 
 		auto MusicLocationCaption = Win32Caption(MusicFile);
 
 		HDC hdc = GetDC(MusicFile);
+		TEXTMETRICW Metrics{};
+		GetTextMetricsW(hdc, &Metrics);
 		SelectObject(hdc, ButtonFont);
 
 		SIZE S{};
 		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), MusicLocationCaption->size(), &S);
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
-		MusicList = CreateWindow(L"listbox", L"", WS_VISIBLE | WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
-		
-		SendMessage(PauseAndPlayButton, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-		SendMessage(VoiceOneGetState, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-		SendMessage(MusicFile, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-		SendMessage(LoadFilesToList, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-		SendMessage(MusicList, WM_SETFONT, (WPARAM)(HFONT)ButtonFont, 0);
-		
+		MusicList = CreateWindow(L"LISTBOX", L"", WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
+
+		Win32SetFont(PauseAndPlayButton, ButtonFont);
+		Win32SetFont(VoiceOneGetState, ButtonFont);
+		Win32SetFont(MusicFile, ButtonFont);
+		Win32SetFont(LoadFilesToList, ButtonFont);
+		Win32SetFont(MusicList, ButtonFont);
+		/////////////////////////////////////
+
+		VolumeFader = CreateWindowEx(
+			0,
+			TRACKBAR_CLASS,
+			L"",
+			WS_VISIBLE | WS_CHILD | TBS_VERT,
+			150, 150,
+			50, 100,
+			hwnd,
+			0,
+			GetModuleHandleW(0),
+			nullptr);
+		SendMessage(VolumeFader, TBM_SETRANGEMIN, false, 0);
+		SendMessage(VolumeFader, TBM_SETRANGEMAX, false, (LPARAM)100);
+		SendMessage(VolumeFader, TBM_SETPOS, true, (LPARAM)50);
+		// SetWindowLongPtr(VolumeFader, GWLP_USERDATA, i);
+		/////////////////////////////////////
+
 		if (SUCCEEDED(hr))
 		{
 			hr = XAudio2Create(&audio);
@@ -265,6 +297,32 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		EndPaint(hwnd, &ps);
 	}
 	return 0;
+	case WM_LBUTTONDOWN:
+	{
+
+		// TODO: get the coordinates and see if we are under a Child control.
+		// TODO: Move this code into a subclass of the control, as we need to send back an event to move the object...
+		int X = GET_X_LPARAM(lParam);
+		int Y = GET_Y_LPARAM(lParam);
+		POINT Pt{ .x = X, .y = Y };
+		wchar_t Buf[64] = { 0 };
+		wsprintf(Buf, L"Mapped: %d,%d\n", X, Y);
+		OutputDebugString(Buf);
+
+		HWND Child = ChildWindowFromPointEx(hwnd, Pt, CWP_ALL);
+		RECT ChildRect{};
+		WINDOWINFO Info{};
+		GetWindowInfo(Child, &Info);
+
+		OutputDebugString(L"");
+		if (Child == VolumeFader)
+		{
+			OutputDebugString(L"Captured VolumeFader\n");
+			SetCapture(Child);
+		}
+	}
+	return 0;
+
 	case WM_COMMAND:
 	{
 		switch (wParam)
@@ -292,7 +350,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				for (auto const& Filename : Files)
 				{
 					SIZE TextSize{};
-					
+
 					ListBox_AddString(MusicList, Filename.c_str());
 					GetTextExtentPoint32W(hdc, Filename.c_str(), Filename.size(), &TextSize);
 					if (TextSize.cx > LongestWidth)
@@ -301,15 +359,16 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					}
 					LongestHeight += TextSize.cy;
 				}
-				
-				
+
+
 				ReleaseDC(MusicList, hdc);
-				
+
 				RECT MusicListRect{};
-				GetWindowRect(MusicList, &MusicListRect); 
+				GetWindowRect(MusicList, &MusicListRect);
 				MusicListRect.right = LongestWidth;
-				MusicListRect.bottom = LongestHeight < 50 ? LongestHeight * 2 : LongestHeight;
+				MusicListRect.bottom = LongestHeight < 50 ? LongestHeight + 5 : LongestHeight;
 				SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
+				ShowWindow(MusicList, SW_SHOW);
 			}
 		}
 		break;
@@ -329,8 +388,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 		if (master)
 			master->DestroyVoice();
-		if (audio)
-			audio->Release();
+
 		OutputDebugString(L"Should have emptied all now\n");
 		PostQuitMessage(0);
 	}
@@ -366,7 +424,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	{
 		return 1;
 	}
-	g_Foo = std::make_shared<Foo>();
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
 	{
