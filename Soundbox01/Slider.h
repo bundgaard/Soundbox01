@@ -1,86 +1,204 @@
 #pragma once
 #include "Application.h"
-
-LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-
-class Slider
+#include <array>
+#include <sstream>
+namespace tretton63
 {
-	HWND m_hwnd;
-	int m_minVal, m_maxVal;
-	int m_position;
-public:
-	Slider(HWND Parent, int x, int y, int width, int height, int minVal, int maxVal)
+
+	constexpr wchar_t SLIDER_CLASS[] = L"SLIDERCLASS";
+
+	class Slider
 	{
-		WNDCLASSEX wc{};
-		wc.cbSize = sizeof(WNDCLASSEX);
-		wc.style = CS_HREDRAW | CS_VREDRAW;
-		wc.lpfnWndProc = &SliderProc;
-		wc.hInstance = GetModuleHandleW(nullptr);
-		wc.lpszClassName = L"Slider";
-		RegisterClassEx(&wc);
+		HWND m_hwnd;
+		int m_minVal, m_maxVal;
+		int m_position;
+		HFONT m_font;
+		int m_x, m_y;
+		int m_width, m_height;
+	public:
+		static bool Register()
+		{
+			WNDCLASSEX wc{};
+			wc.cbSize = sizeof(WNDCLASSEX);
+			wc.cbClsExtra = sizeof(LONG_PTR);
+			wc.style = CS_HREDRAW | CS_VREDRAW;
+			wc.lpfnWndProc = (WNDPROC)Slider::SliderProc;
+			wc.hInstance = GetModuleHandleW(nullptr);
+			wc.lpszClassName = SLIDER_CLASS;
+			return RegisterClassEx(&wc);
+		}
 
-		m_hwnd = CreateWindowEx(0, wc.lpszClassName, L"", WS_CHILD | WS_VISIBLE, x, y, width, height, Parent, nullptr, GetModuleHandleW(nullptr), nullptr);
-		m_minVal = minVal;
-		m_maxVal = maxVal;
-		m_position = 0;
-	}
+		Slider(
+			HWND Parent,
+			int x, int y,
+			int width, int height,
+			int minVal, int maxVal,
+			HFONT Font) : m_x(x), m_y(y),
+			m_width(width), m_height(height),
+			m_minVal(minVal), m_maxVal(maxVal),
+			m_font(Font), m_position(0)
+		{
 
-	HWND GetHandle()
-	{
-		return m_hwnd;
-	}
-	int GetPosition()
-	{
-		RECT Rct{};
-		GetClientRect(m_hwnd, &Rct);
-		int Pos = MulDiv(m_position, Rct.right - Rct.left, m_maxVal - m_minVal) + Rct.left;
-	}
+			m_hwnd = CreateWindowEx(
+				0,
+				SLIDER_CLASS,
+				L"",
+				WS_CHILD | WS_VISIBLE,
+				x, y,
+				width, height,
+				Parent,
+				nullptr,
+				GetModuleHandleW(nullptr),
+				this);
 
-	int SetPosition(int newPosition)
-	{
-		RECT Rct{};
-		GetClientRect(m_hwnd, &Rct);
-		m_position = MulDiv(newPosition - Rct.left, m_maxVal - m_minVal, Rct.right - Rct.left);
-		RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE);
-	}
+		}
 
-private:
-	void OnPaint(/*HDC hdc*/)
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(m_hwnd, &ps);
+		void SetFont(HFONT hFont)
+		{
+			m_font = hFont;
+		}
 
-		RECT Rct{};
-		GetClientRect(m_hwnd, &Rct);
-		int ClientWidth = Rct.right - Rct.left;
-		int ClientHeight = Rct.bottom - Rct.top;
+		HFONT GetFont()
+		{
+			return m_font;
+		}
 
-		HBRUSH hBackgroundBrush = CreateSolidBrush(RGB(240, 240, 240));
-		FillRect(hdc, &ps.rcPaint, hBackgroundBrush);
-		DeleteObject(hBackgroundBrush);
+		HWND GetHandle()
+		{
+			return m_hwnd;
+		}
+		int GetPosition()
+		{
+			RECT Rct{};
+			GetClientRect(m_hwnd, &Rct);
+			int Pos = MulDiv(m_position, Rct.right - Rct.left, m_maxVal - m_minVal) + Rct.left;
+		}
 
-		// Paint the track
+		int SetPosition(int newPosition)
+		{
+			RECT Rct{};
+			GetClientRect(m_hwnd, &Rct);
+			m_position = MulDiv(newPosition - Rct.left, m_maxVal - m_minVal, Rct.right - Rct.left);
+			RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE);
+		}
 
-		int trackLeft = 10;
-		int trackTop = (ClientHeight - 16) / 2; // TODO: fix magic number
-		int trackRight = ClientWidth - 10;
-		int trackBottom = trackTop + 16;
+	private:
+		LRESULT CALLBACK Proc(UINT msg, WPARAM wparam, LPARAM lparam)
+		{
+			std::wstringstream Out{};
+			Out << std::hex << msg << "\n";
+			OutputDebugString(Out.str().c_str());
+			switch (msg)
+			{
+			case WM_PAINT:
+			{
+				PAINTSTRUCT ps;
+				HDC hdc = BeginPaint(m_hwnd, &ps);
+				OnPaint(hdc);
+				EndPaint(m_hwnd, &ps);
+			}
+			return 0;
 
-		HBRUSH hTrackBrush = CreateSolidBrush(RGB(200, 200, 200));
-		RECT TrackRect = RECT{ trackLeft, trackTop, trackRight, trackBottom };
-		FillRect(hdc, &TrackRect, hTrackBrush);
-		DeleteObject(hTrackBrush);
+			case WM_LBUTTONDOWN:
+			{
+				OutputDebugString(L"Slider button down (static)\n");
+				auto MouseX = GET_X_LPARAM(lparam);
+				auto MouseY = GET_Y_LPARAM(lparam);
+				std::array<wchar_t, 64> Buf{};
+				wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
+				OutputDebugStringW(Buf.data());
+				SetCapture(m_hwnd);
+			}
+			return 0;
+			case WM_MOUSEMOVE:
+			{
+				auto MouseX = GET_X_LPARAM(lparam);
+				auto MouseY = GET_Y_LPARAM(lparam);
+				std::wstringstream Out{};
+				Out << MouseX << L"," << MouseY << L"\n";
+				//OutputDebugStringW(Out.str().c_str());
+			}
+			return 0;
+			case WM_LBUTTONUP:
+			{
+				ReleaseCapture();
+			}
+			return 0;				
+			}
+			return DefWindowProc(m_hwnd, msg, wparam, lparam);
+		}
+
+		static LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+		{
+			Slider* self = nullptr;
+			if (self == nullptr && msg == WM_NCCREATE)
+			{
+				CREATESTRUCT* createStruct = reinterpret_cast<CREATESTRUCT*>(lparam);
+				self = static_cast<Slider*>(createStruct->lpCreateParams);
+				self->m_hwnd = hwnd;
+				SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+			}
+			else
+			{
+				self = (Slider*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+			}
+			return self->Proc(msg, wparam, lparam);
+		}
+
+		void OnPaint(HDC hdc)
+		{
+			if (m_font)
+				SelectObject(hdc, m_font);
+			// SetBkMode(hdc, TRANSPARENT);
+
+			// Slider background
+			RECT SliderBackground{};
+			GetClientRect(m_hwnd, &SliderBackground);
+			std::wstringstream Out{};
+			Out << L"ClientRect: " << SliderBackground.left << L"," << SliderBackground.top << L" " << SliderBackground.right << L"," << SliderBackground.bottom << L"\n";
+			OutputDebugString(Out.str().c_str());
+			HBRUSH hBackground = CreateSolidBrush(RGB(240, 240, 240));
+			FillRect(hdc, &SliderBackground, hBackground);
+			DeleteBrush(hBackground);
+
+			int MarginTop = 5;
+			int MarginBottom = -5;
+			int MarginLeft = -5;
+			int MarginRight = 5;
 
 
-		// Paint the thumb
-		int thumbWidth = 20;
-		int thumbHeight = 20;
-		// TODO Need to be defined, should possible be m_position; int thumbLeft = thumbPos
-		EndPaint(m_hwnd, &ps);
-	}
+			// Slider Trackline
+			auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 3;
+
+			RECT SliderTrackbar{ SliderMiddleX, SliderBackground.top + MarginTop, SliderMiddleX, SliderBackground.bottom + MarginBottom };
+
+			MoveToEx(hdc, SliderMiddleX, SliderTrackbar.top, nullptr);
+			LineTo(hdc, SliderMiddleX, SliderTrackbar.bottom);
 
 
-};
+			// Slider max at top
+
+			DrawTextW(hdc, L"Max\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
+			// Slider min at bottom
+			DrawTextW(hdc, L"Min\0", -1, &SliderBackground, DT_RIGHT | DT_SINGLELINE | DT_BOTTOM | DT_NOPREFIX);
+			// Slider thumb
+			RECT SliderThumb{};
+			SliderThumb.left = SliderTrackbar.left + MarginLeft;
+			SliderThumb.right = SliderTrackbar.right + MarginRight;
+			SliderThumb.top = m_position + SliderTrackbar.bottom + MarginBottom;
+			SliderThumb.bottom = m_position + SliderTrackbar.bottom;
+			FillRect(hdc, &SliderThumb, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+
+			// Slider Ticks
+
+		}
+
+
+	};
+
+
+}
 
 
 

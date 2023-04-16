@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <iostream> 
+#include <array>
 
 #include <cstdio>
 #include <cstdlib>
@@ -15,7 +16,7 @@
 #include "Defer.h"
 #include "Win32Layer.h"
 #include "Files.h"
-
+#include "Slider.h"
 
 /*
 Chart
@@ -74,7 +75,118 @@ Global HANDLE hEvent = nullptr;
 Global PTP_WORK WorkItem = nullptr;
 Global bool MusicLoaded;
 
-void NTAPI TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work)
+//////////////////////////////////////////////////
+//////// SLIDER
+
+Local void Slider_OnPaint(HWND hwnd, HDC hdc)
+{
+	SelectObject(hdc, ButtonFont);
+	SetBkMode(hdc, TRANSPARENT);
+
+	// Slider background
+	RECT SliderBackground{};
+	GetClientRect(hwnd, &SliderBackground);
+	HBRUSH hBackground = CreateSolidBrush(RGB(240, 240, 240));
+	FillRect(hdc, &SliderBackground, hBackground);
+	DeleteBrush(hBackground);
+
+	int MarginTop = 5;
+	int MarginBottom = -5;
+	int MarginLeft = -5;
+	int MarginRight = 5;
+
+
+	// Slider Trackline
+	auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 3;
+
+	RECT SliderTrackbar{ SliderMiddleX, SliderBackground.top + MarginTop, SliderMiddleX, SliderBackground.bottom + MarginBottom };
+
+	MoveToEx(hdc, SliderMiddleX, SliderTrackbar.top, nullptr);
+	LineTo(hdc, SliderMiddleX, SliderTrackbar.bottom);
+
+
+	// Slider max at top
+
+	DrawTextW(hdc, L"Max\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
+	// Slider min at bottom
+	DrawTextW(hdc, L"Min\0", -1, &SliderBackground, DT_RIGHT | DT_SINGLELINE | DT_BOTTOM | DT_NOPREFIX);
+	// Slider thumb
+	RECT SliderThumb{};
+	SliderThumb.left = SliderTrackbar.left - 15;
+	SliderThumb.right = SliderTrackbar.right + 15;
+	SliderThumb.top = SliderTrackbar.bottom - 15;
+	SliderThumb.bottom = SliderTrackbar.bottom;
+	//FillRect(hdc, &SliderThumb, (HBRUSH)GetStockObject(BLACK_BRUSH));
+	DrawFrameControl(hdc, &SliderThumb, DFC_SCROLL , DFCS_PUSHED| DFCS_SCROLLUP| DFCS_FLAT);
+}
+Local LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+	switch (msg)
+	{
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+		Slider_OnPaint(hwnd, hdc);
+		EndPaint(hwnd, &ps);
+	}
+	return 0;
+
+	case WM_LBUTTONDOWN:
+	{
+		OutputDebugString(L"Slider button down\n");
+		auto MouseX = GET_X_LPARAM(lparam);
+		auto MouseY = GET_Y_LPARAM(lparam);
+		std::array<wchar_t, 64> Buf;
+		wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
+		OutputDebugStringW(Buf.data());
+	}
+	return 0;
+	case WM_LBUTTONUP:
+	{
+	
+	}
+	return 0;
+	default:
+		return DefWindowProc(hwnd, msg, wparam, lparam);
+	}
+	return 0;
+}
+
+Local bool
+SliderRegisterClass(HINSTANCE hInst)
+{
+	WNDCLASSEX wc{};
+	wc.cbSize = sizeof(WNDCLASSEX);
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.lpfnWndProc = &SliderProc;
+	wc.lpszClassName = L"Slider";
+	wc.hInstance = hInst;
+
+	return RegisterClassEx(&wc);
+}
+
+Local HWND
+SliderCreateWindow(HWND Parent, HINSTANCE Instance, int X, int Y, int Width, int Height, int MaxVal, int MinVal)
+{
+	HWND hwnd = CreateWindowEx(0, 
+		L"Slider", 
+		L"",
+		WS_VISIBLE | WS_CHILD | WS_BORDER,
+		X, Y, 
+		Width, Height, 
+		Parent, 
+		nullptr, 
+		Instance,
+		nullptr);
+	return hwnd;
+}
+
+//////////////////////////////////////////////////
+
+
+void NTAPI
+TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work)
 {
 	wchar_t Buf[64] = { 0 };
 	wsprintf(Buf, L"Starting new work\n");
@@ -266,7 +378,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			L"",
 			WS_VISIBLE | WS_CHILD | TBS_VERT,
 			150, 150,
-			50, 100,
+			64, 128,
 			hwnd,
 			0,
 			GetModuleHandleW(0),
@@ -274,6 +386,9 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(VolumeFader, TBM_SETRANGEMIN, false, 0);
 		SendMessage(VolumeFader, TBM_SETRANGEMAX, false, (LPARAM)100);
 		SendMessage(VolumeFader, TBM_SETPOS, true, (LPARAM)50);
+	
+		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 150, 64, 128, 100, 0);
+	
 		// SetWindowLongPtr(VolumeFader, GWLP_USERDATA, i);
 		/////////////////////////////////////
 
@@ -294,26 +409,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
-
-		// Slider background
-			RECT SliderBackground{ 150, 10, 200, 128 };
-		HBRUSH hBackground = CreateSolidBrush(RGB(240, 240, 240));
-		FillRect(hdc, &SliderBackground, hBackground);
-		DeleteBrush(hBackground);
-
-
-			// Slider Trackline
-		auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 2;
-		MoveToEx(hdc, SliderMiddleX, SliderBackground.top, nullptr);
-		LineTo(hdc, SliderMiddleX, SliderBackground.bottom);
-
-		SetBkMode(hdc, TRANSPARENT);
-			// Slider max at top
-		DrawTextW(hdc, L"Max\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
-			// Slider min at bottom
-
-			// Slider thumb
-
+		
 
 
 		EndPaint(hwnd, &ps);
@@ -445,6 +541,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	if (!Win32RegisterClass(hInst, hbrBackground))
 	{
 		return 1;
+	}
+	if (!SliderRegisterClass(hInst))
+	{
+		return 2;
 	}
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
