@@ -75,7 +75,7 @@ private:
 		// Paint the thumb
 		int thumbWidth = 20;
 		int thumbHeight = 20;
-		int thumbLeft = thumbPos
+		// TODO Need to be defined, should possible be m_position; int thumbLeft = thumbPos
 		EndPaint(m_hwnd, &ps);
 	}
 
