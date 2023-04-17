@@ -131,7 +131,11 @@ Local LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 		EndPaint(hwnd, &ps);
 	}
 	return 0;
+	case WM_CTLCOLORLISTBOX:
+	{
 
+	}
+	return 0;
 	case WM_LBUTTONDOWN:
 	{
 		OutputDebugString(L"Slider button down\n");
