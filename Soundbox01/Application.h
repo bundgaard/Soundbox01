@@ -24,10 +24,20 @@
 #define Local static
 #define Scoped static
 
-
-
 #define PauseAndPlayEvent     (WM_USER+1)
 #define VoiceOneGetStateEvent (WM_USER+2)
+
+consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
+{
+
+	int R = (ColorHex >> 24) & 0xff;
+	int G = (ColorHex >> 16) & 0xff;
+	int B = (ColorHex >> 8) & 0xff;
+	return RGB(R, G, B);
+}
+
+static_assert(to_rgb(0x003600ff) == 0x003600);
+
 
 constexpr wchar_t BACKGROUND_WAV[] = L"c:\\code\\10562542_Liquid_Times_Original_Mix.wav";
 constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
