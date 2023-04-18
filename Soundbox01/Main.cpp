@@ -189,10 +189,6 @@ VoiceOne_OnClick(HWND self)
 
 }
 
-Local void Win32SetFont(HWND hwnd, HFONT Font)
-{
-	SendMessage(hwnd, WM_SETFONT, (WPARAM)Font, 0);
-}
 
 Local SIZE Win32TextMeasure()
 {
@@ -255,27 +251,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		Win32SetFont(MusicFile, ButtonFont);
 		Win32SetFont(LoadFilesToList, ButtonFont);
 		Win32SetFont(MusicList, ButtonFont);
-		/////////////////////////////////////
-
-		VolumeFader = CreateWindowEx(
-			0,
-			TRACKBAR_CLASS,
-			L"",
-			WS_VISIBLE | WS_CHILD | TBS_VERT,
-			150, 150,
-			64, 128,
-			hwnd,
-			0,
-			GetModuleHandleW(0),
-			nullptr);
-		SendMessage(VolumeFader, TBM_SETRANGEMIN, false, 0);
-		SendMessage(VolumeFader, TBM_SETRANGEMAX, false, (LPARAM)100);
-		SendMessage(VolumeFader, TBM_SETPOS, true, (LPARAM)50);
 
 		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 150, 64, 128, 100, 0);
-
-		// SetWindowLongPtr(VolumeFader, GWLP_USERDATA, i);
-		/////////////////////////////////////
 
 		if (SUCCEEDED(hr))
 		{
@@ -322,7 +299,23 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 	}
 	return 0;
-
+	case WM_DRAWITEM:
+	{
+		LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
+		SetTextColor(dis->hDC, RGB(255, 0, 0));
+		auto Caption = Win32Caption(dis->hwndItem);
+		SetBkMode(dis->hDC, TRANSPARENT);
+		// TODO: fix state drawing and also some nicer background
+		FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
+		DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+	}
+	return true;
+	case WM_CTLCOLORBTN:
+	{
+		SetBkMode((HDC)wParam, OPAQUE);
+		SetTextColor((HDC)wParam, RGB(0, 0, 255));
+	}
+	return (LONG_PTR)GetStockObject(NULL_BRUSH);
 	case WM_COMMAND:
 	{
 		switch (wParam)
@@ -349,7 +342,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				int LongestHeight = 0;
 				for (auto const& Filename : Files)
 				{
-					
+
 
 					ListBox_AddString(MusicList, Filename.c_str());
 					if (Filename.size() < INT_MAX)
@@ -366,7 +359,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					{
 						OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
 					}
-					
+
 				}
 
 

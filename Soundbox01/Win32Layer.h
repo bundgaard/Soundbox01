@@ -8,6 +8,6 @@ namespace tretton63
 	HFONT Win32CreateFont(std::wstring const& Fontface, int FontSize);
 	HWND Win32CreateWindow(std::wstring const& Title, int X, int Y, int Width, int Height, HINSTANCE hInst);
 	std::optional<std::wstring> Win32Caption(HWND hwnd);
-	HWND Win32CreateButton(HWND Parent, std::wstring const& Caption, int EventId, int X, int Y, int Width, int Height);
-
+	HWND Win32CreateButton(HWND Parent, std::wstring const& Caption, uintptr_t EventId, int X, int Y, int Width, int Height);
+	void Win32SetFont(HWND hwnd, HFONT Font);
 }

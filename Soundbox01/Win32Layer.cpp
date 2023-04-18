@@ -67,19 +67,26 @@ namespace tretton63
 		}
 
 		Text.resize((size_t)TextLength + 1, L'\0');
-		GetWindowTextW(hwnd, Text.data(), Text.size());
+		GetWindowTextW(hwnd, Text.data(), static_cast<int>(Text.size()));
 		return Text;
 	}
 
 	HWND
-	Win32CreateButton(HWND Parent, std::wstring const& Caption, int EventId, int X, int Y, int Width, int Height)
+		Win32CreateButton(HWND Parent, std::wstring const& Caption, uintptr_t EventId, int X, int Y, int Width, int Height)
 	{
 		return CreateWindow(L"BUTTON", Caption.c_str(),
-			WS_VISIBLE | WS_CHILD,
+			WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
 			X, Y, Width, Height, Parent,
-			(HMENU)EventId,
+			(HMENU)(EventId),
 			GetModuleHandle(nullptr),
 			nullptr);
 
+	}
+
+
+
+	void Win32SetFont(HWND hwnd, HFONT Font)
+	{
+		SendMessage(hwnd, WM_SETFONT, (WPARAM)Font, 0);
 	}
 }
