@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+#include <cmath>
 
 
 #include "Defer.h"
@@ -74,7 +75,8 @@ std::optional<WAVEDATA> g_Data;
 Global HANDLE hEvent = nullptr;
 Global PTP_WORK WorkItem = nullptr;
 Global bool MusicLoaded;
-
+Global bool MouseHeld;
+Global int nPos;
 //////////////////////////////////////////////////
 //////// SLIDER
 
@@ -84,7 +86,7 @@ Local void Slider_OnPaint(HWND hwnd, HDC hdc)
 	SetBkMode(hdc, TRANSPARENT);
 
 	// Slider background
-	RECT SliderBackground{};
+	Global RECT SliderBackground{};
 	GetClientRect(hwnd, &SliderBackground);
 	HBRUSH hBackground = CreateSolidBrush(RGB(240, 240, 240));
 	FillRect(hdc, &SliderBackground, hBackground);
@@ -97,7 +99,7 @@ Local void Slider_OnPaint(HWND hwnd, HDC hdc)
 
 
 	// Slider Trackline
-	auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 3;
+	auto SliderMiddleX = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 4 + 2;
 
 	RECT SliderTrackbar{ SliderMiddleX, SliderBackground.top + MarginTop, SliderMiddleX, SliderBackground.bottom + MarginBottom };
 
@@ -107,20 +109,36 @@ Local void Slider_OnPaint(HWND hwnd, HDC hdc)
 
 	// Slider max at top
 
-	DrawTextW(hdc, L"Max\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
+	DrawTextW(hdc, L"MAX\0", -1, &SliderBackground, DT_RIGHT | DT_NOPREFIX);
 	// Slider min at bottom
-	DrawTextW(hdc, L"Min\0", -1, &SliderBackground, DT_RIGHT | DT_SINGLELINE | DT_BOTTOM | DT_NOPREFIX);
+	DrawTextW(hdc, L"MIN\0", -1, &SliderBackground, DT_RIGHT | DT_SINGLELINE | DT_BOTTOM | DT_NOPREFIX);
 	// Slider thumb
-	RECT SliderThumb{};
+	RECT SliderThumb{ 0,0,18,18 };
+	
 	SliderThumb.left = SliderTrackbar.left - 15;
 	SliderThumb.right = SliderTrackbar.right + 15;
-	SliderThumb.top = SliderTrackbar.bottom - 15;
-	SliderThumb.bottom = SliderTrackbar.bottom;
-	//FillRect(hdc, &SliderThumb, (HBRUSH)GetStockObject(BLACK_BRUSH));
-	DrawFrameControl(hdc, &SliderThumb, DFC_SCROLL , DFCS_PUSHED| DFCS_SCROLLUP| DFCS_FLAT);
+	OffsetRect(&SliderThumb, SliderTrackbar.left - 15, nPos);
+	
+	if (SliderThumb.top <= MarginTop)
+	{
+		
+		SliderThumb.top = MarginTop;
+		SliderThumb.bottom = MarginTop + 18;
+		DrawFrameControl(hdc, &SliderThumb, DFC_SCROLL, DFCS_PUSHED | DFCS_SCROLLDOWN | DFCS_FLAT);
+	} else if (SliderThumb.bottom >= SliderBackground.bottom + MarginBottom)
+	{
+		SliderThumb.bottom = SliderBackground.bottom + MarginBottom;
+		SliderThumb.top = SliderThumb.bottom - 18;
+		DrawFrameControl(hdc, &SliderThumb, DFC_SCROLL, DFCS_PUSHED | DFCS_SCROLLUP | DFCS_FLAT);
+	}
+	else
+	{
+		DrawFrameControl(hdc, &SliderThumb, DFC_SCROLL, DFCS_PUSHED | DFCS_SCROLLRIGHT | DFCS_FLAT);
+	}
+	
 }
 Local LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
-{
+{	
 	switch (msg)
 	{
 	case WM_PAINT:
@@ -131,24 +149,47 @@ Local LRESULT CALLBACK SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 		EndPaint(hwnd, &ps);
 	}
 	return 0;
-	case WM_CTLCOLORLISTBOX:
-	{
-
-	}
-	return 0;
+	case WM_ERASEBKGND:
+		return 1;
 	case WM_LBUTTONDOWN:
 	{
 		OutputDebugString(L"Slider button down\n");
 		auto MouseX = GET_X_LPARAM(lparam);
 		auto MouseY = GET_Y_LPARAM(lparam);
-		std::array<wchar_t, 64> Buf;
+		std::array<wchar_t, 64> Buf{};
 		wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
 		OutputDebugStringW(Buf.data());
+		nPos = MouseY;
+		MouseHeld = true;
+		SetCapture(hwnd);
 	}
 	return 0;
 	case WM_LBUTTONUP:
 	{
-	
+		OutputDebugStringW(L"Slider button up\n");
+		auto MouseX = GET_X_LPARAM(lparam);
+		auto MouseY = GET_Y_LPARAM(lparam);
+		std::array<wchar_t, 64> Buf{};
+		wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
+		OutputDebugStringW(Buf.data());
+		MouseHeld = false;
+		nPos = MouseY;
+		ReleaseCapture();
+	}
+	return 0;
+	case WM_MOUSEMOVE:
+	{
+		auto MouseX = GET_X_LPARAM(lparam);
+		auto MouseY = GET_Y_LPARAM(lparam);
+		std::array<wchar_t, 64> Buf{};
+		wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
+		if (MouseHeld)
+		{
+			nPos = MouseY;
+			InvalidateRect(hwnd, NULL, FALSE);
+		}
+		OutputDebugStringW(Buf.data());
+		
 	}
 	return 0;
 	default:
@@ -173,14 +214,14 @@ SliderRegisterClass(HINSTANCE hInst)
 Local HWND
 SliderCreateWindow(HWND Parent, HINSTANCE Instance, int X, int Y, int Width, int Height, int MaxVal, int MinVal)
 {
-	HWND hwnd = CreateWindowEx(0, 
-		L"Slider", 
+	HWND hwnd = CreateWindowEx(0,
+		L"Slider",
 		L"",
 		WS_VISIBLE | WS_CHILD | WS_BORDER,
-		X, Y, 
-		Width, Height, 
-		Parent, 
-		nullptr, 
+		X, Y,
+		Width, Height,
+		Parent,
+		nullptr,
 		Instance,
 		nullptr);
 	return hwnd;
@@ -364,7 +405,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SelectObject(hdc, ButtonFont);
 
 		SIZE S{};
-		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), MusicLocationCaption->size(), &S);
+		if (MusicLocationCaption->size() <= INT_MAX)
+			GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
 		MusicList = CreateWindow(L"LISTBOX", L"", WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
@@ -390,9 +432,9 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(VolumeFader, TBM_SETRANGEMIN, false, 0);
 		SendMessage(VolumeFader, TBM_SETRANGEMAX, false, (LPARAM)100);
 		SendMessage(VolumeFader, TBM_SETPOS, true, (LPARAM)50);
-	
+
 		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 150, 64, 128, 100, 0);
-	
+
 		// SetWindowLongPtr(VolumeFader, GWLP_USERDATA, i);
 		/////////////////////////////////////
 
@@ -413,7 +455,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
-		
+
 
 
 		EndPaint(hwnd, &ps);
@@ -471,15 +513,24 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				int LongestHeight = 0;
 				for (auto const& Filename : Files)
 				{
-					SIZE TextSize{};
+					
 
 					ListBox_AddString(MusicList, Filename.c_str());
-					GetTextExtentPoint32W(hdc, Filename.c_str(), Filename.size(), &TextSize);
-					if (TextSize.cx > LongestWidth)
+					if (Filename.size() < INT_MAX)
 					{
-						LongestWidth = TextSize.cx;
+						SIZE TextSize{};
+						GetTextExtentPoint32W(hdc, Filename.c_str(), static_cast<int>(Filename.size()), &TextSize);
+						if (TextSize.cx > LongestWidth)
+						{
+							LongestWidth = TextSize.cx;
+						}
+						LongestHeight += TextSize.cy;
 					}
-					LongestHeight += TextSize.cy;
+					else
+					{
+						OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
+					}
+					
 				}
 
 
