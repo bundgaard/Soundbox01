@@ -135,14 +135,13 @@ namespace tretton63
 		{
 			auto MouseX = GET_X_LPARAM(lparam);
 			auto MouseY = GET_Y_LPARAM(lparam);
-			std::array<wchar_t, 64> Buf{};
-			wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
 			if (MouseHeld)
 			{
 				nPos = MouseY;
+				SendMessage(GetParent(hwnd), (WM_USER + 5), max(min(nPos, 100), 0), 0); // TODO: fix when we have a better structure.
 				InvalidateRect(hwnd, NULL, FALSE);
 			}
-			OutputDebugStringW(Buf.data());
+			
 
 		}
 		return 0;
@@ -171,7 +170,7 @@ namespace tretton63
 			HINSTANCE Instance,
 			int X, int Y,
 			int Width, int Height,
-			int MaxVal, int MinVal)
+			int MaxVal, int MinVal) // TODO: make a struct or class to collect all of this and make it available in the clamp function
 	{
 		HWND hwnd = CreateWindowEx(0,
 			L"Slider",

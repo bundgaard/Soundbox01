@@ -107,6 +107,12 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 	auto Selection = ListBox_GetCurSel(MusicList);
 	Local int PreviousIndex;
 	// TODO: figure out how to release the buffer and reload...
+
+	if (Index != nPos)
+	{
+		OutputDebugString(L"We have to reload the music...\n");
+	}
+
 	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
 	{
 		wchar_t Buf[255] = { 0 };
@@ -245,7 +251,16 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
-		MusicList = CreateWindow(L"LISTBOX", L"", WS_CHILD | WS_BORDER | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
+		MusicList = CreateWindow(
+			L"LISTBOX", 
+			L"", 
+			WS_CHILD | WS_BORDER | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, 
+			posX, posY, 
+			Width, 150, 
+			hwnd, 
+			0, 
+			GetModuleHandleW(0),
+			nullptr);
 
 		Win32SetFont(PauseAndPlayButton, ButtonFont);
 		Win32SetFont(VoiceOneGetState, ButtonFont);
@@ -253,7 +268,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		Win32SetFont(LoadFilesToList, ButtonFont);
 		Win32SetFont(MusicList, ButtonFont);
 
-		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 10, 64, 128, 100, 0);
+		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 500, 10, 64, 128, 100, 0);
 
 		if (SUCCEEDED(hr))
 		{
@@ -292,7 +307,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			SelectObject(dis->hDC, old);
 
 			SetTextColor(dis->hDC, ForegroundColor);
-
+			
 			// TODO: fix state drawing and also some nicer background
 			auto Caption = Win32Caption(dis->hwndItem);
 			if (Caption.has_value())
@@ -302,26 +317,44 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 		case ODT_LISTBOX:
 		{
+			OutputDebugStringW(L"ODT LISTBOX\n");
 			int Index = dis->itemID;
 			std::array<wchar_t, 1024> Buf{};
 			ListBox_GetText(dis->hwndItem, Index, Buf.data());
-			if (dis->itemState & ODS_SELECTED)
+			if (dis->itemState & ODS_SELECTED || dis->itemState & ODS_FOCUS)
 			{
 				FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
 			}
+			else
+			{
+				FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
+			}
 			OutputDebugStringW(L"Music list\n");
+			SetTextColor(dis->hDC, ForegroundColor);
 			DrawTextW(dis->hDC, Buf.data(), -1, &dis->rcItem, DT_SINGLELINE | DT_NOPREFIX);
 		}
 		break;
 		}
 	}
 	return true;
+	
 	case WM_CTLCOLORBTN:
 	{
 		SetBkMode((HDC)wParam, OPAQUE);
 		SetTextColor((HDC)wParam, RGB(0, 0, 255));
 	}
 	return (LONG_PTR)GetStockObject(NULL_BRUSH);
+
+	case (WM_USER+5):
+	{
+		int Volume = (int)wParam;
+		wchar_t Buf[64] = { 0 };
+		float ToVolume = (100 - Volume) / 100.0;
+		swprintf(Buf,64, L"Volume %d -> %.2f\n", Volume, ToVolume);
+		OutputDebugStringW(Buf);
+		voice1->SetVolume(ToVolume, 0);
+	}
+	return 0;
 	case WM_COMMAND:
 	{
 		switch (wParam)
