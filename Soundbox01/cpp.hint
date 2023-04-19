@@ -4,3 +4,4 @@
 #define Local
 #define NTAPI
 #define Global
+#define PS_SOLID

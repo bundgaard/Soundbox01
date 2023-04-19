@@ -68,6 +68,9 @@
     <ClInclude Include="Slider.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Styleguide.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

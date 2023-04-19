@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cmath>
 
+#include "Styleguide.h"
 
 #include "Defer.h"
 #include "Win32Layer.h"
@@ -201,7 +202,6 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	std::optional<tretton63::WAVEDATA> Data;
 
-
 	switch (msg)
 	{
 	case WM_CREATE:
@@ -244,7 +244,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
 		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 		ReleaseDC(MusicFile, hdc);
-		MusicList = CreateWindow(L"LISTBOX", L"", WS_CHILD | WS_BORDER, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
+		MusicList = CreateWindow(L"LISTBOX", L"", WS_CHILD | WS_BORDER | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, posX, posY, Width, 150, hwnd, 0, GetModuleHandleW(0), nullptr);
 
 		Win32SetFont(PauseAndPlayButton, ButtonFont);
 		Win32SetFont(VoiceOneGetState, ButtonFont);
@@ -252,7 +252,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		Win32SetFont(LoadFilesToList, ButtonFont);
 		Win32SetFont(MusicList, ButtonFont);
 
-		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 150, 64, 128, 100, 0);
+		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 300, 10, 64, 128, 100, 0);
 
 		if (SUCCEEDED(hr))
 		{
@@ -274,40 +274,37 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		EndPaint(hwnd, &ps);
 	}
 	return 0;
-	case WM_LBUTTONDOWN:
-	{
-
-		// TODO: get the coordinates and see if we are under a Child control.
-		// TODO: Move this code into a subclass of the control, as we need to send back an event to move the object...
-		int X = GET_X_LPARAM(lParam);
-		int Y = GET_Y_LPARAM(lParam);
-		POINT Pt{ .x = X, .y = Y };
-		wchar_t Buf[64] = { 0 };
-		wsprintf(Buf, L"Mapped: %d,%d\n", X, Y);
-		OutputDebugString(Buf);
-
-		HWND Child = ChildWindowFromPointEx(hwnd, Pt, CWP_ALL);
-		RECT ChildRect{};
-		WINDOWINFO Info{};
-		GetWindowInfo(Child, &Info);
-
-		OutputDebugString(L"");
-		if (Child == VolumeFader)
-		{
-			OutputDebugString(L"Captured VolumeFader\n");
-			SetCapture(Child);
-		}
-	}
-	return 0;
+	
 	case WM_DRAWITEM:
 	{
 		LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
-		SetTextColor(dis->hDC, RGB(255, 0, 0));
-		auto Caption = Win32Caption(dis->hwndItem);
 		SetBkMode(dis->hDC, TRANSPARENT);
+		
+		FillRect(dis->hDC, &dis->rcItem, BackgroundBrush.Value());
+		SetTextColor(dis->hDC, ForegroundColor);
+
+		if (dis->hwndItem == MusicList)
+		{
+			
+			int Index = dis->itemID;
+			std::array<wchar_t, 1024> Buf{};
+			ListBox_GetText(dis->hwndItem, Index, Buf.data());
+			if (dis->itemState & ODS_SELECTED)
+			{
+				FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
+			}
+			OutputDebugStringW(L"Music list\n");
+			DrawTextW(dis->hDC, Buf.data(), -1, &dis->rcItem, DT_SINGLELINE | DT_NOPREFIX);
+		}
+		
+		
 		// TODO: fix state drawing and also some nicer background
-		FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
-		DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		auto Caption = Win32Caption(dis->hwndItem);
+		if (Caption.has_value())
+			DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		
+
+
 	}
 	return true;
 	case WM_CTLCOLORBTN:

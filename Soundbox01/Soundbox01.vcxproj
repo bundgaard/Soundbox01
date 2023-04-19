@@ -145,6 +145,7 @@
     <ClInclude Include="GenerateSound.h" />
     <ClInclude Include="Slider.h" />
     <ClInclude Include="StringLayer.h" />
+    <ClInclude Include="Styleguide.h" />
     <ClInclude Include="WaveReader.h" />
     <ClInclude Include="Win32Layer.h" />
   </ItemGroup>

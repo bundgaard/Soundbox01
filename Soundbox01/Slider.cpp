@@ -1,5 +1,7 @@
 #include "Slider.h"
 #include <array>
+#include "Styleguide.h"
+
 namespace tretton63
 {
 	constexpr int ThumbWidth = 18;
@@ -13,6 +15,7 @@ namespace tretton63
 	Local void
 		Slider_DrawText(HDC hdc, RECT* SliderRect)
 	{
+		SetTextColor(hdc, ForegroundColor);
 		// Slider max at top
 		DrawTextW(hdc, ThumbCaption_1, -1, SliderRect, DT_RIGHT | DT_NOPREFIX);
 		// Slider min at bottom
@@ -49,20 +52,19 @@ namespace tretton63
 	Local void
 		Slider_DrawTrackline(HDC hdc, RECT* SliderBackground, RECT* Margin)
 	{
+		auto Old = SelectObject(hdc, TracklineColor.Value());
 		int x = SliderBackground->left + (SliderBackground->right - SliderBackground->left) / 4 + 2;
 		POINT TrackLine{ x, SliderBackground->top };
 		MoveToEx(hdc, TrackLine.x, TrackLine.y + Margin->top, nullptr);
 		LineTo(hdc, TrackLine.x, TrackLine.y + SliderBackground->bottom + Margin->bottom);
+		SelectObject(hdc, Old);
 	}
 
 	Local void
 		Slider_DrawBackground(HDC hdc, RECT* SliderBackground, COLORREF color)
 	{
 		SetBkMode(hdc, TRANSPARENT);
-		HBRUSH hBackground = CreateSolidBrush(color);
-		FillRect(hdc, SliderBackground, hBackground);
-		DeleteBrush(hBackground);
-
+		FillRect(hdc, SliderBackground, BackgroundBrush.Value());
 	}
 
 	Local inline RECT
