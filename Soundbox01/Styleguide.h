@@ -51,6 +51,7 @@ The pen is solid. When this pen is used in any GDI drawing function that takes a
 	*/
 	static unique_gdi<HPEN> ForegroundPen(CreatePen(PS_SOLID, 1, ForegroundColor));
 	static unique_gdi<HPEN> TracklineColor(CreatePen(PS_SOLID, 1, RGB(255, 255, 255)));
+	static unique_gdi<HPEN> HilitePen(CreatePen(PS_DASHDOTDOT, 1, ForegroundColor));
 	
 
 }

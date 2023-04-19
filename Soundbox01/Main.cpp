@@ -213,12 +213,13 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		int posY = 10;
 		int Width = 100;
 		int Height = 25;
+		int Offset = 30;
 		PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
-		posY += Height;
+		posY += Offset;
 		VoiceOneGetState = Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height);
-		posY += Height;
+		posY += Offset;
 		auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", (WM_USER + 4), posX, posY, Width, Height);
-		posY += Height;
+		posY += Offset;
 		MusicFile = CreateWindow(L"EDIT",
 			L"C:\\Code",
 			WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
@@ -228,7 +229,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			(HMENU)WM_USER + 3,
 			GetModuleHandleW(nullptr),
 			nullptr);
-		posY += Height;
+		posY += Offset;
 
 
 
@@ -280,12 +281,27 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
 		SetBkMode(dis->hDC, TRANSPARENT);
 		
-		FillRect(dis->hDC, &dis->rcItem, BackgroundBrush.Value());
-		SetTextColor(dis->hDC, ForegroundColor);
-
-		if (dis->hwndItem == MusicList)
+		switch (dis->CtlType)
 		{
-			
+		case ODT_BUTTON:
+		{
+			FillRect(dis->hDC, &dis->rcItem, BackgroundBrush.Value());
+			// TODO: somethign weird with the SELECTION and focus... might need to have ifs instead.
+			auto old = SelectObject(dis->hDC, ForegroundPen.Value());
+			RoundRect(dis->hDC, dis->rcItem.left, dis->rcItem.top, dis->rcItem.right, dis->rcItem.bottom, 2, 2);
+			SelectObject(dis->hDC, old);
+
+			SetTextColor(dis->hDC, ForegroundColor);
+
+			// TODO: fix state drawing and also some nicer background
+			auto Caption = Win32Caption(dis->hwndItem);
+			if (Caption.has_value())
+				DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+		}
+		break;
+		case ODT_LISTBOX:
+		{
 			int Index = dis->itemID;
 			std::array<wchar_t, 1024> Buf{};
 			ListBox_GetText(dis->hwndItem, Index, Buf.data());
@@ -296,15 +312,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			OutputDebugStringW(L"Music list\n");
 			DrawTextW(dis->hDC, Buf.data(), -1, &dis->rcItem, DT_SINGLELINE | DT_NOPREFIX);
 		}
-		
-		
-		// TODO: fix state drawing and also some nicer background
-		auto Caption = Win32Caption(dis->hwndItem);
-		if (Caption.has_value())
-			DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-		
-
-
+		break;
+		}
 	}
 	return true;
 	case WM_CTLCOLORBTN:
