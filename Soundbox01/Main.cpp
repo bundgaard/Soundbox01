@@ -352,7 +352,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		float ToVolume = (100 - Volume) / 100.0;
 		swprintf(Buf,64, L"Volume %d -> %.2f\n", Volume, ToVolume);
 		OutputDebugStringW(Buf);
-		voice1->SetVolume(ToVolume, 0);
+		if (voice1 != nullptr)
+			voice1->SetVolume(ToVolume, 0);
 	}
 	return 0;
 	case WM_COMMAND:
