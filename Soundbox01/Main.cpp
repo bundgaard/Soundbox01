@@ -205,7 +205,8 @@ Win32TextMeasure()
 
 
 
-Local BOOL OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
+Local BOOL 
+OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 {
 	int posX = 10;
 	int posY = 10;
