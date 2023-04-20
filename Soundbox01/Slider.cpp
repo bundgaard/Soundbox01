@@ -141,8 +141,6 @@ namespace tretton63
 				SendMessage(GetParent(hwnd), (WM_USER + 5), max(min(nPos, 100), 0), 0); // TODO: fix when we have a better structure.
 				InvalidateRect(hwnd, NULL, FALSE);
 			}
-			
-
 		}
 		return 0;
 		default:

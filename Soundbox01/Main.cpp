@@ -197,244 +197,214 @@ VoiceOne_OnClick(HWND self)
 }
 
 
-Local SIZE Win32TextMeasure()
+Local SIZE 
+Win32TextMeasure()
 {
 	return {};
 }
 
 
+
+Local BOOL OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
+{
+	int posX = 10;
+	int posY = 10;
+	int Width = 100;
+	int Height = 25;
+	int Offset = 30;
+
+
+	HRESULT hr = S_OK;
+	
+	
+	hEvent = CreateEvent(nullptr, true, false, nullptr);
+	
+	ButtonFont = Win32CreateFont(L"Tahoma", 14);
+	
+	PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
+	posY += Offset;
+	VoiceOneGetState = Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height);
+	posY += Offset;
+	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", (WM_USER + 4), posX, posY, Width, Height);
+	posY += Offset;
+	MusicFile = CreateWindow(L"EDIT",
+		L"C:\\Code",
+		WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
+		posX, posY,
+		Width, Height,
+		hwnd,
+		(HMENU)WM_USER + 3,
+		GetModuleHandleW(nullptr),
+		nullptr);
+	posY += Offset;
+
+	auto MusicLocationCaption = Win32Caption(MusicFile);
+
+	HDC hdc = GetDC(MusicFile);
+	TEXTMETRICW Metrics{};
+	GetTextMetricsW(hdc, &Metrics);
+	SelectObject(hdc, ButtonFont);
+
+	SIZE S{};
+	if (MusicLocationCaption->size() <= INT_MAX)
+		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
+	SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
+	ReleaseDC(MusicFile, hdc);
+
+	MusicList = Win32CreateListbox(hwnd, posX, posY, Width, 150);
+
+	Win32SetFont(PauseAndPlayButton, ButtonFont);
+	Win32SetFont(VoiceOneGetState, ButtonFont);
+	Win32SetFont(MusicFile, ButtonFont);
+	Win32SetFont(LoadFilesToList, ButtonFont);
+	Win32SetFont(MusicList, ButtonFont);
+
+	HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 500, 10, 64, 128, 100, 0);
+
+	if (SUCCEEDED(hr))
+	{
+		hr = XAudio2Create(&audio);
+	}
+
+	if (SUCCEEDED(hr))
+	{
+		OutputDebugString(L"Create Master voice\n");
+		hr = audio->CreateMasteringVoice(&master, 2, 44100);
+	}
+
+	if (FAILED(hr))
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
+Local void
+OnDestroy(HWND hwnd)
+{
+	if (ButtonFont)
+		DeleteObject(ButtonFont);
+	if (voice1)
+		voice1->FlushSourceBuffers();
+	if (g_Data.has_value() && g_Data->Location)
+	{
+		VirtualFree(g_Data->Location, 0, MEM_FREE);
+		g_Data->Location = nullptr;
+	}
+	if (master)
+		master->DestroyVoice();
+
+	OutputDebugString(L"Should have emptied all now\n");
+	PostQuitMessage(0);
+}
+
+Local void 
+OnDrawItem(HWND hwnd, DRAWITEMSTRUCT const* pDis)
+{
+	SetBkMode(pDis->hDC, TRANSPARENT);
+
+	if (pDis->CtlType == ODT_BUTTON)
+	{
+		Win32CustomButton(pDis);
+	}
+	else if (pDis->CtlType == ODT_LISTBOX)
+	{
+		Win32CustomButton(pDis);
+	}
+}
+
+// HBRUSH Cls_OnCtlColor(HWND hwnd, HDC hdc, HWND hwndChild, int type)
+Local HBRUSH 
+OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
+{
+	SetBkMode(hdc, OPAQUE);
+	SetTextColor(hdc, RGB(0, 0, 255));
+	return (HBRUSH)GetStockObject(NULL_BRUSH);
+}
+
+// /* void Cls_OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify) */
+Local void 
+OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
+{
+	switch (ID)
+	{
+	case PauseAndPlayEvent:
+	{
+		PlayAndPause_OnClick(PauseAndPlayButton, Parent);
+	}
+	break;
+	case VoiceOneGetStateEvent:
+	{
+		VoiceOne_OnClick(VoiceOneGetState);
+	}
+	break;
+	case WM_CM_LOADFILES:
+	{
+		auto Path = Win32Caption(MusicFile);
+		if (Path.has_value())
+		{
+			std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
+			ListBox_ResetContent(MusicList);
+			HDC hdc = GetDC(MusicList);
+			int LongestWidth = 0;
+			int LongestHeight = 0;
+			for (auto const& Filename : Files)
+			{
+				ListBox_AddString(MusicList, Filename.c_str());
+				if (Filename.size() < INT_MAX)
+				{
+					SIZE TextSize{};
+					GetTextExtentPoint32W(hdc, Filename.c_str(), static_cast<int>(Filename.size()), &TextSize);
+					if (TextSize.cx > LongestWidth)
+					{
+						LongestWidth = TextSize.cx;
+					}
+					LongestHeight += TextSize.cy;
+				}
+				else
+				{
+					OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
+				}
+			}
+			ReleaseDC(MusicList, hdc);
+
+			RECT MusicListRect{};
+			GetWindowRect(MusicList, &MusicListRect);
+			MusicListRect.right = LongestWidth;
+			MusicListRect.bottom = LongestHeight < 50 ? LongestHeight + 5 : LongestHeight;
+			SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
+			ShowWindow(MusicList, SW_SHOW);
+		}
+	}
+	break;
+	}
+
+}
+
 LRESULT CALLBACK
 SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	std::optional<tretton63::WAVEDATA> Data;
-
 	switch (msg)
 	{
-	case WM_CREATE:
-	{
-		HRESULT hr = S_OK;
-		hEvent = CreateEvent(nullptr, true, false, nullptr);
-		ButtonFont = Win32CreateFont(L"Tahoma", 14);
-		int posX = 10;
-		int posY = 10;
-		int Width = 100;
-		int Height = 25;
-		int Offset = 30;
-		PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
-		posY += Offset;
-		VoiceOneGetState = Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height);
-		posY += Offset;
-		auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", (WM_USER + 4), posX, posY, Width, Height);
-		posY += Offset;
-		MusicFile = CreateWindow(L"EDIT",
-			L"C:\\Code",
-			WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
-			posX, posY,
-			Width, Height,
-			hwnd,
-			(HMENU)WM_USER + 3,
-			GetModuleHandleW(nullptr),
-			nullptr);
-		posY += Offset;
 
+		HANDLE_MSG(hwnd, WM_CREATE, OnCreate);
+		HANDLE_MSG(hwnd, WM_DRAWITEM, OnDrawItem);
+		HANDLE_MSG(hwnd, WM_CTLCOLORBTN, OnColorButton);
+		HANDLE_MSG(hwnd, WM_COMMAND, OnCommand);
 
-
-		auto MusicLocationCaption = Win32Caption(MusicFile);
-
-		HDC hdc = GetDC(MusicFile);
-		TEXTMETRICW Metrics{};
-		GetTextMetricsW(hdc, &Metrics);
-		SelectObject(hdc, ButtonFont);
-
-		SIZE S{};
-		if (MusicLocationCaption->size() <= INT_MAX)
-			GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
-		SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
-		ReleaseDC(MusicFile, hdc);
-		MusicList = CreateWindow(
-			L"LISTBOX", 
-			L"", 
-			WS_CHILD | WS_BORDER | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS, 
-			posX, posY, 
-			Width, 150, 
-			hwnd, 
-			0, 
-			GetModuleHandleW(0),
-			nullptr);
-
-		Win32SetFont(PauseAndPlayButton, ButtonFont);
-		Win32SetFont(VoiceOneGetState, ButtonFont);
-		Win32SetFont(MusicFile, ButtonFont);
-		Win32SetFont(LoadFilesToList, ButtonFont);
-		Win32SetFont(MusicList, ButtonFont);
-
-		HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 500, 10, 64, 128, 100, 0);
-
-		if (SUCCEEDED(hr))
-		{
-			hr = XAudio2Create(&audio);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			OutputDebugString(L"Create Master voice\n");
-			hr = audio->CreateMasteringVoice(&master, 2, 44100);
-		}
-
-	}
-	return 0;
-	case WM_PAINT:
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hwnd, &ps);
-		EndPaint(hwnd, &ps);
-	}
-	return 0;
-	
-	case WM_DRAWITEM:
-	{
-		LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
-		SetBkMode(dis->hDC, TRANSPARENT);
-		
-		switch (dis->CtlType)
-		{
-		case ODT_BUTTON:
-		{
-			FillRect(dis->hDC, &dis->rcItem, BackgroundBrush.Value());
-			// TODO: somethign weird with the SELECTION and focus... might need to have ifs instead.
-			auto old = SelectObject(dis->hDC, ForegroundPen.Value());
-			RoundRect(dis->hDC, dis->rcItem.left, dis->rcItem.top, dis->rcItem.right, dis->rcItem.bottom, 2, 2);
-			SelectObject(dis->hDC, old);
-
-			SetTextColor(dis->hDC, ForegroundColor);
-			
-			// TODO: fix state drawing and also some nicer background
-			auto Caption = Win32Caption(dis->hwndItem);
-			if (Caption.has_value())
-				DrawTextW(dis->hDC, Caption->c_str(), static_cast<int>(Caption->size()), &dis->rcItem, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-		}
-		break;
-		case ODT_LISTBOX:
-		{
-			OutputDebugStringW(L"ODT LISTBOX\n");
-			int Index = dis->itemID;
-			std::array<wchar_t, 1024> Buf{};
-			ListBox_GetText(dis->hwndItem, Index, Buf.data());
-			if (dis->itemState & ODS_SELECTED || dis->itemState & ODS_FOCUS)
-			{
-				FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
-			}
-			else
-			{
-				FillRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
-			}
-			OutputDebugStringW(L"Music list\n");
-			SetTextColor(dis->hDC, ForegroundColor);
-			DrawTextW(dis->hDC, Buf.data(), -1, &dis->rcItem, DT_SINGLELINE | DT_NOPREFIX);
-		}
-		break;
-		}
-	}
-	return true;
-	
-	case WM_CTLCOLORBTN:
-	{
-		SetBkMode((HDC)wParam, OPAQUE);
-		SetTextColor((HDC)wParam, RGB(0, 0, 255));
-	}
-	return (LONG_PTR)GetStockObject(NULL_BRUSH);
-
-	case (WM_USER+5):
+	case WM_VOLUME_CHANGED:
 	{
 		int Volume = (int)wParam;
 		wchar_t Buf[64] = { 0 };
-		float ToVolume = (100 - Volume) / 100.0;
-		swprintf(Buf,64, L"Volume %d -> %.2f\n", Volume, ToVolume);
+		float ToVolume = (100 - Volume) / 100.0f;
+		swprintf(Buf, 64, L"Volume %d -> %.2f\n", Volume, ToVolume);
 		OutputDebugStringW(Buf);
 		if (voice1 != nullptr)
 			voice1->SetVolume(ToVolume, 0);
 	}
 	return 0;
-	case WM_COMMAND:
-	{
-		switch (wParam)
-		{
-		case PauseAndPlayEvent:
-		{
-			PlayAndPause_OnClick(PauseAndPlayButton, hwnd);
-		}
-		break;
-		case VoiceOneGetStateEvent:
-		{
-			VoiceOne_OnClick(VoiceOneGetState);
-		}
-		break;
-		case (WM_USER + 4):
-		{
-			auto Path = Win32Caption(MusicFile);
-			if (Path.has_value())
-			{
-				std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
-				ListBox_ResetContent(MusicList);
-				HDC hdc = GetDC(MusicList);
-				int LongestWidth = 0;
-				int LongestHeight = 0;
-				for (auto const& Filename : Files)
-				{
 
-
-					ListBox_AddString(MusicList, Filename.c_str());
-					if (Filename.size() < INT_MAX)
-					{
-						SIZE TextSize{};
-						GetTextExtentPoint32W(hdc, Filename.c_str(), static_cast<int>(Filename.size()), &TextSize);
-						if (TextSize.cx > LongestWidth)
-						{
-							LongestWidth = TextSize.cx;
-						}
-						LongestHeight += TextSize.cy;
-					}
-					else
-					{
-						OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
-					}
-
-				}
-
-
-				ReleaseDC(MusicList, hdc);
-
-				RECT MusicListRect{};
-				GetWindowRect(MusicList, &MusicListRect);
-				MusicListRect.right = LongestWidth;
-				MusicListRect.bottom = LongestHeight < 50 ? LongestHeight + 5 : LongestHeight;
-				SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
-				ShowWindow(MusicList, SW_SHOW);
-			}
-		}
-		break;
-		}
-	}
-	return 0;
-	case WM_DESTROY:
-	{
-		if (ButtonFont)
-			DeleteObject(ButtonFont);
-		if (voice1)
-			voice1->FlushSourceBuffers();
-		if (Data.has_value() && Data->Location)
-		{
-			VirtualFree(Data->Location, 0, MEM_FREE);
-			Data->Location = nullptr;
-		}
-		if (master)
-			master->DestroyVoice();
-
-		OutputDebugString(L"Should have emptied all now\n");
-		PostQuitMessage(0);
-	}
-	return 0;
+	HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
 	default:
 		return DefWindowProcW(hwnd, msg, wParam, lParam);
 	}

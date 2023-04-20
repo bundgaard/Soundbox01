@@ -24,8 +24,12 @@
 #define Local static
 #define Scoped static
 
-#define PauseAndPlayEvent     (WM_USER+1)
-#define VoiceOneGetStateEvent (WM_USER+2)
+#define PauseAndPlayEvent     (WM_USER + 1)
+#define VoiceOneGetStateEvent (WM_USER + 2)
+
+#define WM_CM_LOADFILES       (WM_USER + 4)
+#define WM_VOLUME_CHANGED	  (WM_USER + 5)
+
 
 consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
 {
