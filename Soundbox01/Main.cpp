@@ -66,6 +66,7 @@ Global PTP_WORK WorkItem = nullptr;
 Global bool MusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
+Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
 //////////////////////////////////////////////////
 //////// SLIDER
 
@@ -107,10 +108,18 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 	auto Selection = ListBox_GetCurSel(MusicList);
 	Local int PreviousIndex;
 	// TODO: figure out how to release the buffer and reload...
-
-	if (Index != nPos)
+	wchar_t IndexOut[64] = { 0 };
+	swprintf(IndexOut,64,L"Index %d\n", Index);
+	OutputDebugString(IndexOut);
+	if (Index != nPos && voice1 != nullptr)
 	{
 		OutputDebugString(L"We have to reload the music...\n");
+		HRESULT hr = voice1->FlushSourceBuffers();
+		if (SUCCEEDED(hr))
+		{
+			// ReloadMusic();
+		}
+
 	}
 
 	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
@@ -143,7 +152,7 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 					{
 						OutputDebugStringW(L"Try and play the note");
 						auto XBuffer = LoadBuffer(Data.value());
-						voice1->SetVolume(1.0f, XAUDIO2_COMMIT_NOW);
+						voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
 						hr = voice1->SubmitSourceBuffer(XBuffer.get());
 						MusicLoaded = true;
 						g_Data = Data;
@@ -195,14 +204,6 @@ VoiceOne_OnClick(HWND self)
 	}
 
 }
-
-
-Local SIZE 
-Win32TextMeasure()
-{
-	return {};
-}
-
 
 
 Local BOOL 
@@ -310,7 +311,7 @@ OnDrawItem(HWND hwnd, DRAWITEMSTRUCT const* pDis)
 	}
 	else if (pDis->CtlType == ODT_LISTBOX)
 	{
-		Win32CustomButton(pDis);
+		Win32CustomListBox(pDis);
 	}
 }
 
@@ -400,8 +401,11 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		float ToVolume = (100 - Volume) / 100.0f;
 		swprintf(Buf, 64, L"Volume %d -> %.2f\n", Volume, ToVolume);
 		OutputDebugStringW(Buf);
-		if (voice1 != nullptr)
-			voice1->SetVolume(ToVolume, 0);
+		g_Volume = ToVolume;
+		if (voice1)
+		{
+			voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
+		}
 	}
 	return 0;
 

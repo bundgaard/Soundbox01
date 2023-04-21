@@ -123,6 +123,7 @@ namespace tretton63
 		Win32CustomListBox(DRAWITEMSTRUCT const* pDis)
 	{
 		OutputDebugStringW(L"ODT LISTBOX\n");
+
 		int Index = pDis->itemID;
 		std::array<wchar_t, 1024> Buf{};
 		ListBox_GetText(pDis->hwndItem, Index, Buf.data());
