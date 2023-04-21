@@ -19,6 +19,8 @@
 #include "Win32Layer.h"
 #include "Files.h"
 #include "Slider.h"
+#include "Voice.h"
+
 
 /*
 Chart
@@ -46,7 +48,7 @@ using namespace tretton63;
 
 Global CComPtr<IXAudio2> audio = nullptr;
 Global IXAudio2MasteringVoice* master;
-Global IXAudio2SourceVoice* voice1;
+//Global IXAudio2SourceVoice* voice1;
 
 Global HWND PauseAndPlayButton;
 Global HWND VoiceOneGetState;
@@ -56,7 +58,7 @@ Global HWND LoadFilesToList;
 Global HWND MusicList;
 Global HWND VolumeFader;
 HFONT ButtonFont;
-
+std::shared_ptr<Voice> voice1;
 Global WAVEFORMATEX WaveFormatEx;
 
 std::optional<WAVEDATA> g_Data;
@@ -67,8 +69,6 @@ Global bool MusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
-//////////////////////////////////////////////////
-//////// SLIDER
 
 
 void NTAPI
@@ -103,81 +103,85 @@ LoadBuffer(WAVEDATA const& Data)
 Local void
 PlayAndPause_OnClick(HWND self, HWND parent)
 {
+	// Separate out the load of the music and the change of text into something better.
+
 	auto Text = Win32Caption(self);
 	auto Index = ListBox_GetCurSel(MusicList);
 	auto Selection = ListBox_GetCurSel(MusicList);
 	Local int PreviousIndex;
 	// TODO: figure out how to release the buffer and reload...
 	wchar_t IndexOut[64] = { 0 };
-	swprintf(IndexOut,64,L"Index %d\n", Index);
+	swprintf(IndexOut, 64, L"Index %d\n", Index);
 	OutputDebugString(IndexOut);
 	if (Index != nPos && voice1 != nullptr)
 	{
 		OutputDebugString(L"We have to reload the music...\n");
 		HRESULT hr = voice1->FlushSourceBuffers();
+
 		if (SUCCEEDED(hr))
 		{
 			// ReloadMusic();
+
 		}
 
 	}
 
 	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
 	{
-		wchar_t Buf[255] = { 0 };
-		ListBox_GetText(MusicList, Index, Buf);
+		
+		auto TextLen = ListBox_GetTextLen(MusicList, Index);
+		std::wstring Text;
+		Text.resize(TextLen);
+		ListBox_GetText(MusicList, Index, Text.data());
 
 		SetWindowTextW(self, L"Pause");
+		HRESULT hr = S_OK;
+		// Ask for current selection of MusicList
+
+		OutputDebugStringW(L"");
+
+		if (voice1 == nullptr)
 		{
+			auto Data = LoadWaveMMap(&WaveFormatEx, Text.data());
 
-			HRESULT hr = S_OK;
-			// Ask for current selection of MusicList
-
-			OutputDebugStringW(L"");
-
-			if (voice1 == nullptr)
+			if (Data.has_value())
 			{
-				auto Data = LoadWaveMMap(&WaveFormatEx, Buf);
 
-				if (Data.has_value())
+				if (SUCCEEDED(hr))
 				{
+					OutputDebugString(L"CreateSourceVoice\n");
+					hr = audio->CreateSourceVoice(&voice1, &WaveFormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
+				}
 
-					if (SUCCEEDED(hr))
+				if (Data->Location)
+				{
+					OutputDebugStringW(L"Try and play the note");
+					auto XBuffer = LoadBuffer(Data.value());
+					voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
+					hr = voice1->SubmitSourceBuffer(XBuffer.get());
+					MusicLoaded = true;
+					g_Data = Data;
+					SubmitThreadpoolWork(WorkItem);
+				}
+
+
+				if (FAILED(hr))
+				{
+					DWORD dwError = GetLastError();
+					if (dwError != 0x00)
 					{
-						OutputDebugString(L"CreateSourceVoice\n");
-						hr = audio->CreateSourceVoice(&voice1, &WaveFormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
-					}
-
-					if (Data->Location)
-					{
-						OutputDebugStringW(L"Try and play the note");
-						auto XBuffer = LoadBuffer(Data.value());
-						voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
-						hr = voice1->SubmitSourceBuffer(XBuffer.get());
-						MusicLoaded = true;
-						g_Data = Data;
-						SubmitThreadpoolWork(WorkItem);
-					}
-
-
-					if (FAILED(hr))
-					{
-						DWORD dwError = GetLastError();
-						if (dwError != 0x00)
-						{
-							printf("0x%x\n", dwError);
-							printf("failed to create Voice\n");
-						}
+						printf("0x%x\n", dwError);
+						printf("failed to create Voice\n");
 					}
 				}
 			}
+		}
 
-			if (voice1 && MusicLoaded)
+		if (voice1 && MusicLoaded)
+		{
+			if (SUCCEEDED(hr))
 			{
-				if (SUCCEEDED(hr))
-				{
-					hr = voice1->Start();
-				}
+				hr = voice1->Start();
 			}
 		}
 	}
@@ -206,7 +210,7 @@ VoiceOne_OnClick(HWND self)
 }
 
 
-Local BOOL 
+Local BOOL
 OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 {
 	int posX = 10;
@@ -217,12 +221,12 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 
 
 	HRESULT hr = S_OK;
-	
-	
+
+
 	hEvent = CreateEvent(nullptr, true, false, nullptr);
-	
+
 	ButtonFont = Win32CreateFont(L"Tahoma", 14);
-	
+
 	PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
 	posY += Offset;
 	VoiceOneGetState = Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height);
@@ -300,7 +304,7 @@ OnDestroy(HWND hwnd)
 	PostQuitMessage(0);
 }
 
-Local void 
+Local void
 OnDrawItem(HWND hwnd, DRAWITEMSTRUCT const* pDis)
 {
 	SetBkMode(pDis->hDC, TRANSPARENT);
@@ -316,7 +320,7 @@ OnDrawItem(HWND hwnd, DRAWITEMSTRUCT const* pDis)
 }
 
 // HBRUSH Cls_OnCtlColor(HWND hwnd, HDC hdc, HWND hwndChild, int type)
-Local HBRUSH 
+Local HBRUSH
 OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 {
 	SetBkMode(hdc, OPAQUE);
@@ -325,7 +329,7 @@ OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 }
 
 // /* void Cls_OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify) */
-Local void 
+Local void
 OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 {
 	switch (ID)

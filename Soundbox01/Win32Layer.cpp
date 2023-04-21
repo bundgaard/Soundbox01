@@ -1,10 +1,12 @@
 #include "Win32Layer.h"
 #include "Styleguide.h"
 #include <array>
+#include <vector>
+
 
 namespace tretton63
 {
-	ATOM 
+	ATOM
 		Win32RegisterClass(HINSTANCE hInst, HBRUSH hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1))
 	{
 		WNDCLASSEX wc{};
@@ -20,7 +22,7 @@ namespace tretton63
 		return RegisterClassEx(&wc);
 	}
 
-	HFONT 
+	HFONT
 		Win32CreateFont(std::wstring const& Fontface, int FontSize)
 	{
 		HFONT Font = CreateFontW(
@@ -41,7 +43,7 @@ namespace tretton63
 		return Font;
 	}
 
-	HWND 
+	HWND
 		Win32CreateWindow(std::wstring const& Title, int X, int Y, int Width, int Height, HINSTANCE hInst)
 	{
 		return CreateWindowEx(
@@ -56,7 +58,7 @@ namespace tretton63
 			nullptr);
 	}
 
-	std::optional<std::wstring> 
+	std::optional<std::wstring>
 		Win32Caption(HWND hwnd)
 	{
 		std::wstring Text{};
@@ -91,7 +93,7 @@ namespace tretton63
 
 
 
-	void 
+	void
 		Win32SetFont(HWND hwnd, HFONT Font)
 	{
 		SendMessage(hwnd, WM_SETFONT, (WPARAM)Font, 0);
@@ -101,12 +103,29 @@ namespace tretton63
 	void
 		Win32CustomButton(DRAWITEMSTRUCT const* pDis)
 	{
-		FillRect(pDis->hDC, &pDis->rcItem, BackgroundBrush.Value());
-		// TODO: somethign weird with the SELECTION and focus... might need to have ifs instead.
-		auto old = SelectObject(pDis->hDC, ForegroundPen.Value());
-		RoundRect(pDis->hDC, pDis->rcItem.left, pDis->rcItem.top, pDis->rcItem.right, pDis->rcItem.bottom, 2, 2);
-		SelectObject(pDis->hDC, old);
+		
+		// TODO: Figure out a better way of writing this.
+		if (pDis->itemState & ODS_FOCUS)
+		{
+			auto old = SelectObject(pDis->hDC, HilitePen.Value());
+			RoundRect(pDis->hDC, pDis->rcItem.left, pDis->rcItem.top, pDis->rcItem.right, pDis->rcItem.bottom, 2, 2);
+			SelectObject(pDis->hDC, old);
+			FillRect(pDis->hDC, &pDis->rcItem, BackgroundBrush.Value());
+		}
 
+		if (pDis->itemState & ODS_SELECTED)
+		{
+			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(GRAY_BRUSH));
+		}
+		else
+		{
+			auto old = SelectObject(pDis->hDC, ForegroundPen.Value());
+			RoundRect(pDis->hDC, pDis->rcItem.left, pDis->rcItem.top, pDis->rcItem.right, pDis->rcItem.bottom, 2, 2);
+			SelectObject(pDis->hDC, old);
+			FillRect(pDis->hDC, &pDis->rcItem, BackgroundBrush.Value());
+
+		}
+		
 		SetTextColor(pDis->hDC, ForegroundColor);
 
 		// TODO: fix state drawing and also some nicer background
@@ -122,11 +141,14 @@ namespace tretton63
 	void
 		Win32CustomListBox(DRAWITEMSTRUCT const* pDis)
 	{
-		OutputDebugStringW(L"ODT LISTBOX\n");
-
 		int Index = pDis->itemID;
-		std::array<wchar_t, 1024> Buf{};
-		ListBox_GetText(pDis->hwndItem, Index, Buf.data());
+
+
+		auto TextLen = ListBox_GetTextLen(pDis->hwndItem, Index);
+		std::wstring Text{};
+		Text.resize(TextLen);
+
+		ListBox_GetText(pDis->hwndItem, Index, Text.data());
 		if (pDis->itemState & ODS_SELECTED || pDis->itemState & ODS_FOCUS)
 		{
 			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(WHITE_BRUSH));
@@ -135,9 +157,14 @@ namespace tretton63
 		{
 			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
 		}
-		OutputDebugStringW(L"Music list\n");
+
 		SetTextColor(pDis->hDC, ForegroundColor);
-		DrawTextW(pDis->hDC, Buf.data(), -1, const_cast<LPRECT>(&pDis->rcItem), DT_SINGLELINE | DT_NOPREFIX);
+		DrawTextW(pDis->hDC, Text.c_str(), static_cast<int>(Text.size()), const_cast<LPRECT>(&pDis->rcItem), DT_SINGLELINE | DT_NOPREFIX);
+	}
+
+	void Win32DrawText(HDC hdc, std::wstring Text, RECT* BoundingBox, UINT Format, COLORREF color)
+	{
+
 	}
 
 	HWND

@@ -134,6 +134,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Slider.cpp" />
     <ClCompile Include="StringLayer.cpp" />
+    <ClCompile Include="Voice.cpp" />
     <ClCompile Include="WaveReader.cpp" />
     <ClCompile Include="Win32Layer.cpp" />
   </ItemGroup>
@@ -146,6 +147,7 @@
     <ClInclude Include="Slider.h" />
     <ClInclude Include="StringLayer.h" />
     <ClInclude Include="Styleguide.h" />
+    <ClInclude Include="Voice.h" />
     <ClInclude Include="WaveReader.h" />
     <ClInclude Include="Win32Layer.h" />
   </ItemGroup>
