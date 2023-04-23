@@ -7,7 +7,7 @@
 namespace tretton63
 {
 	ATOM
-		Win32RegisterClass(HINSTANCE hInst, HBRUSH hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1))
+		Win32RegisterClass(HINSTANCE hInst, WNDPROC aWndProc, HBRUSH hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1))
 	{
 		WNDCLASSEX wc{};
 		wc.cbSize = sizeof(WNDCLASSEX);
@@ -17,7 +17,7 @@ namespace tretton63
 		wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
 		wc.hIconSm = wc.hIcon;
 		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-		wc.lpfnWndProc = &SoundboxProc;
+		wc.lpfnWndProc = (WNDPROC)aWndProc;
 		wc.style = CS_HREDRAW | CS_VREDRAW;
 		return RegisterClassEx(&wc);
 	}
@@ -44,7 +44,10 @@ namespace tretton63
 	}
 
 	HWND
-		Win32CreateWindow(std::wstring const& Title, int X, int Y, int Width, int Height, HINSTANCE hInst)
+		Win32CreateWindow(std::wstring const& Title,
+			int X, int Y,
+			int Width, int Height,
+			HINSTANCE hInst)
 	{
 		return CreateWindowEx(
 			WS_EX_OVERLAPPEDWINDOW,
@@ -61,7 +64,6 @@ namespace tretton63
 	std::optional<std::wstring>
 		Win32Caption(HWND hwnd)
 	{
-		std::wstring Text{};
 		auto TextLength = GetWindowTextLengthW(hwnd);
 		if (TextLength == 0)
 		{
@@ -74,13 +76,19 @@ namespace tretton63
 			}
 		}
 
-		Text.resize((size_t)TextLength + 1, L'\0');
-		GetWindowTextW(hwnd, Text.data(), static_cast<int>(Text.size()));
+		std::wstring Text(TextLength + 1, L'\0');
+		GetWindowTextW(hwnd, Text.data(), TextLength + 1);
+		Text.resize(TextLength);
 		return Text;
 	}
 
 	HWND
-		Win32CreateButton(HWND Parent, std::wstring const& Caption, uintptr_t EventId, int X, int Y, int Width, int Height)
+		Win32CreateButton(
+			HWND Parent,
+			std::wstring const& Caption,
+			uintptr_t EventId,
+			int X, int Y,
+			int Width, int Height)
 	{
 		return CreateWindow(L"BUTTON", Caption.c_str(),
 			WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
@@ -88,7 +96,6 @@ namespace tretton63
 			(HMENU)(EventId),
 			GetModuleHandle(nullptr),
 			nullptr);
-
 	}
 
 
@@ -103,7 +110,7 @@ namespace tretton63
 	void
 		Win32CustomButton(DRAWITEMSTRUCT const* pDis)
 	{
-		
+
 		// TODO: Figure out a better way of writing this.
 		if (pDis->itemState & ODS_FOCUS)
 		{
@@ -125,7 +132,7 @@ namespace tretton63
 			FillRect(pDis->hDC, &pDis->rcItem, BackgroundBrush.Value());
 
 		}
-		
+
 		SetTextColor(pDis->hDC, ForegroundColor);
 
 		// TODO: fix state drawing and also some nicer background

@@ -20,7 +20,8 @@
 #include "Files.h"
 #include "Slider.h"
 #include "Voice.h"
-
+#include "PlayAndPauseButton.h"
+#include "WindowMessages.h"
 
 /*
 Chart
@@ -48,7 +49,7 @@ using namespace tretton63;
 
 Global CComPtr<IXAudio2> audio = nullptr;
 Global IXAudio2MasteringVoice* master;
-//Global IXAudio2SourceVoice* voice1;
+Global IXAudio2SourceVoice* voice1;
 
 Global HWND PauseAndPlayButton;
 Global HWND VoiceOneGetState;
@@ -58,7 +59,7 @@ Global HWND LoadFilesToList;
 Global HWND MusicList;
 Global HWND VolumeFader;
 HFONT ButtonFont;
-std::shared_ptr<Voice> voice1;
+//std::shared_ptr<Voice> voice1;
 Global WAVEFORMATEX WaveFormatEx;
 
 std::optional<WAVEDATA> g_Data;
@@ -99,12 +100,9 @@ LoadBuffer(WAVEDATA const& Data)
 	XBuffer->pAudioData = (LPBYTE)Data.Location;
 	return XBuffer;
 }
-
-Local void
-PlayAndPause_OnClick(HWND self, HWND parent)
+Local void DummyFunctionForLoadingMusic(HWND self)
 {
 	// Separate out the load of the music and the change of text into something better.
-
 	auto Text = Win32Caption(self);
 	auto Index = ListBox_GetCurSel(MusicList);
 	auto Selection = ListBox_GetCurSel(MusicList);
@@ -128,7 +126,7 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 
 	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
 	{
-		
+
 		auto TextLen = ListBox_GetTextLen(MusicList, Index);
 		std::wstring Text;
 		Text.resize(TextLen);
@@ -193,7 +191,11 @@ PlayAndPause_OnClick(HWND self, HWND parent)
 
 		voice1->Stop();
 	}
+
 }
+
+
+
 
 Local void
 VoiceOne_OnClick(HWND self)
@@ -319,7 +321,7 @@ OnDrawItem(HWND hwnd, DRAWITEMSTRUCT const* pDis)
 	}
 }
 
-// HBRUSH Cls_OnCtlColor(HWND hwnd, HDC hdc, HWND hwndChild, int type)
+
 Local HBRUSH
 OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 {
@@ -328,7 +330,7 @@ OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 	return (HBRUSH)GetStockObject(NULL_BRUSH);
 }
 
-// /* void Cls_OnCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify) */
+
 Local void
 OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 {
@@ -412,6 +414,30 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 	}
 	return 0;
+	
+	case WM_CM_PLAYMUSIC:
+	{
+		OutputDebugStringW(L"Start playing\n");
+		// Extract selected file from listbox
+		// Create voice and fill the voice with the music
+
+		if (voice1 != nullptr)
+		{
+			// create voice
+		}
+	}
+	return 0;
+	
+	case WM_CM_PAUSEMUSIC:
+	{
+		OutputDebugStringW(L"Pause playing\n");
+		// Maybe just "stop"/pause the music and on play we decide if we have changed the song or should "resume" / start it again.
+		if (voice1 != nullptr)
+		{
+			voice1->Stop(XAUDIO2_COMMIT_NOW);
+		}
+	}
+	return 0;
 
 	HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
 	default:
@@ -441,7 +467,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 		return 1;
 	}
 	HBRUSH hbrBackground = CreateSolidBrush(to_rgb(0x003600ff));
-	if (!Win32RegisterClass(hInst, hbrBackground))
+	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground))
 	{
 		return 1;
 	}

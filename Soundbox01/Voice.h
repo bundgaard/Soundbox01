@@ -14,5 +14,7 @@ public:
 	void SetVolume(FLOAT newValue);
 	FLOAT GetVolume();
 	void LoadWave();
+	void FlushSourceBuffers();
+	void SubmitSourceBuffer(void* data);
 };
 

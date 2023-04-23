@@ -24,14 +24,10 @@
 #define Local static
 #define Scoped static
 
-#define PauseAndPlayEvent     (WM_USER + 1)
-#define VoiceOneGetStateEvent (WM_USER + 2)
-
-#define WM_CM_LOADFILES       (WM_USER + 4)
-#define WM_VOLUME_CHANGED	  (WM_USER + 5)
 
 
-consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
+
+inline consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff
 {
 
 	int R = (ColorHex >> 24) & 0xff;
@@ -48,9 +44,4 @@ constexpr wchar_t CAMERASHUTTER[] = L"c:\\code\\camerashutter.wav";
 constexpr wchar_t CCLASSNAME[] = L"CSoundBox01Wnd";
 constexpr wchar_t CTITLENAME[] = L"Soundbox 01";
 
-struct PauseAndPlay
-{
-	bool IsPaused;
-};
-
-LRESULT CALLBACK SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+inline LRESULT CALLBACK SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
