@@ -23,14 +23,14 @@ namespace tretton63
 	}
 
 	HFONT
-		Win32CreateFont(std::wstring const& Fontface, int FontSize)
+		Win32CreateFont(std::wstring const& Fontface, int FontSize, int Weight = FW_NORMAL )
 	{
 		HFONT Font = CreateFontW(
 			FontSize,
 			0,
 			0,
 			0,
-			FW_NORMAL,
+			Weight,
 			false,
 			false,
 			false,

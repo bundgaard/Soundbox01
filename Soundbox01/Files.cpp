@@ -28,7 +28,7 @@ namespace tretton63
 				{
 					OutputDebugStringW(Filename.c_str());
 					std::wstring NewPath{};
-					NewPath += Path.substr(0,Path.size()-1);
+					NewPath += Path.substr(0,Path.size());
 					NewPath += L"\\";
 					NewPath += Filename;
 					Result.push_back(NewPath);

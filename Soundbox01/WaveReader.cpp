@@ -118,6 +118,7 @@ namespace tretton63
 			if (SoundFile)
 				CloseHandle(SoundFile);
 		}
+		OutputDebugStringW(L"Loaded file and returning\n");
 		return Result;
 	}
 }

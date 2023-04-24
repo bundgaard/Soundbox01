@@ -23,6 +23,7 @@
 #include "PlayAndPauseButton.h"
 #include "WindowMessages.h"
 #include <wil/resource.h>
+#include <wil/com.h>
 
 
 /*
@@ -48,8 +49,7 @@ Lines
 // Comment on a single line
 
 using namespace tretton63;
-
-Global CComPtr<IXAudio2> audio = nullptr;
+Global wil::com_ptr<IXAudio2> audio;
 Global IXAudio2MasteringVoice* master;
 Global IXAudio2SourceVoice* voice1;
 
@@ -226,10 +226,10 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 
 
 	HRESULT hr = S_OK;
-	
+
 	hEvent = CreateEvent(nullptr, true, false, nullptr);
-	
-	ButtonFont.reset(Win32CreateFont(L"Tahoma", 14));
+
+	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
 
 	PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
 	posY += Offset;
@@ -254,15 +254,15 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	TEXTMETRICW Metrics{};
 	GetTextMetricsW(hdc, &Metrics);
 	SelectObject(hdc, ButtonFont.get());
-	
+
 	SIZE S{};
 	if (MusicLocationCaption->size() <= INT_MAX)
 		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
-	SetWindowPos(MusicFile, nullptr, 0, 0, S.cx, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
+	SetWindowPos(MusicFile, nullptr, 0, 0, S.cx + 15, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 	ReleaseDC(MusicFile, hdc);
 
 	MusicList = Win32CreateListbox(hwnd, posX, posY, Width, 150);
-	
+
 	Win32SetFont(PauseAndPlayButton, ButtonFont.get());
 	Win32SetFont(VoiceOneGetState, ButtonFont.get());
 	Win32SetFont(MusicFile, ButtonFont.get());
@@ -440,11 +440,58 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		if (voice1 != nullptr)
 		{
-			// create voice
+
+
+
+
 		}
 		else
 		{
+			// create voice
+			// Load File from LoadWave
+			WAVEFORMATEX FormatEx{};
+			auto Data = LoadWaveMMap(&FormatEx, SelectedText);
+			HRESULT hr = S_OK;
+			if (SUCCEEDED(hr))
+			{
+				hr = audio->CreateSourceVoice(&voice1, &FormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
+				OutputDebugStringW(L"CreateSourceVoice\n");
+			}
+			if (SUCCEEDED(hr))
+			{
+				hr = voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
+				OutputDebugStringW(L"SetVolume\n");
+			}
+			if (SUCCEEDED(hr))
+			{
+				OutputDebugStringW(L"Foobarfish\n");
+				if (Data.has_value())
+				{
+					auto Buffer = LoadBuffer(*Data);
+					hr = voice1->SubmitSourceBuffer(Buffer.get());
+				}
+				if (SUCCEEDED(hr))
+				{
+					hr = voice1->Start(XAUDIO2_COMMIT_NOW);
+				}
+				if (FAILED(hr))
+				{
+					OutputDebugStringW(L"Failed to play\n");
+				}
+			}
+			if (FAILED(hr))
+			{
+				DWORD dwError = GetLastError();
+				if (dwError != 0x00)
+				{
+					OutputDebugStringW(L"Failed to create and configure voice\n");
+					wchar_t Buf[64] = { 0 };
+					swprintf(Buf, 64, L"dwError %x\n", dwError);
+					OutputDebugStringW(Buf);
+					
+				}
 
+			}
 		}
 	}
 	return 0;
@@ -492,7 +539,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	{
 		return 1;
 	}
-	
+
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
 	{

@@ -29,6 +29,7 @@ namespace tretton63
 		SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 		m_mouseHeld = false;
 		nPos = 0;
+		m_font = nullptr;
 
 	}
 
@@ -121,11 +122,26 @@ namespace tretton63
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hwnd, &ps);
+			if (m_font != nullptr)
+			{
+				SelectObject(hdc, m_font);
+			}
 			OnPaint(hwnd, ps);
 			EndPaint(hwnd, &ps);
 		}
 		return 0;
-
+		case WM_SETFONT:
+		{
+			HFONT Font = (HFONT)wparam;
+			BOOL bRedraw = (BOOL)lparam;
+			OutputDebugStringW(L"Recieved the WM_SETFONT\n");
+			if (m_font != Font)
+			{
+				m_font = Font;
+				InvalidateRect(hwnd, nullptr, bRedraw);
+			}
+		}
+		return 0;
 		case WM_ERASEBKGND:
 			return 1;
 		case WM_LBUTTONDOWN:

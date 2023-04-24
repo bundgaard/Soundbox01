@@ -16,6 +16,7 @@ namespace tretton63
 		HWND m_hwnd;
 		bool m_mouseHeld;
 		int nPos;
+		HFONT m_font;
 
 	public:
 		Slider(HWND Parent, int x, int y, int width, int height);
