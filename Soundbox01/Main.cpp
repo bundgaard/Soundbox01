@@ -57,7 +57,9 @@ Global HWND MusicFile;
 Global HWND SoundProgress;
 Global HWND LoadFilesToList;
 Global HWND MusicList;
-Global HWND VolumeFader;
+
+std::unique_ptr<Slider> VolumeFader02;
+
 HFONT ButtonFont;
 //std::shared_ptr<Voice> voice1;
 Global WAVEFORMATEX WaveFormatEx;
@@ -211,7 +213,6 @@ VoiceOne_OnClick(HWND self)
 
 }
 
-
 Local BOOL
 OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 {
@@ -223,8 +224,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 
 
 	HRESULT hr = S_OK;
-
-
+	
 	hEvent = CreateEvent(nullptr, true, false, nullptr);
 
 	ButtonFont = Win32CreateFont(L"Tahoma", 14);
@@ -252,7 +252,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	TEXTMETRICW Metrics{};
 	GetTextMetricsW(hdc, &Metrics);
 	SelectObject(hdc, ButtonFont);
-
+	
 	SIZE S{};
 	if (MusicLocationCaption->size() <= INT_MAX)
 		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
@@ -260,15 +260,15 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	ReleaseDC(MusicFile, hdc);
 
 	MusicList = Win32CreateListbox(hwnd, posX, posY, Width, 150);
-
+	
 	Win32SetFont(PauseAndPlayButton, ButtonFont);
 	Win32SetFont(VoiceOneGetState, ButtonFont);
 	Win32SetFont(MusicFile, ButtonFont);
 	Win32SetFont(LoadFilesToList, ButtonFont);
 	Win32SetFont(MusicList, ButtonFont);
 
-	HWND VolumeFader02 = SliderCreateWindow(hwnd, GetModuleHandleW(0), 500, 10, 64, 128, 100, 0);
-
+	VolumeFader02 = std::make_unique<Slider>(hwnd, 500, 10, 64, 128); // TODO: reimplement min and max
+	
 	if (SUCCEEDED(hr))
 	{
 		hr = XAudio2Create(&audio);
@@ -389,6 +389,17 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 
 }
 
+Local std::wstring MusicList_GetSelectedItem()
+{
+	auto SelectedIndex = ListBox_GetCurSel(MusicList);
+	auto SelectedTextLength = ListBox_GetTextLen(MusicList, SelectedIndex);
+	std::wstring SelectedText(SelectedTextLength + 1, L'\0');
+	ListBox_GetText(MusicList, SelectedIndex, SelectedText.data());
+	SelectedText.resize(SelectedTextLength);
+	return SelectedText;
+}
+
+
 LRESULT CALLBACK
 SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -414,20 +425,29 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		}
 	}
 	return 0;
-	
+
 	case WM_CM_PLAYMUSIC:
 	{
 		OutputDebugStringW(L"Start playing\n");
 		// Extract selected file from listbox
 		// Create voice and fill the voice with the music
 
+		auto SelectedText = MusicList_GetSelectedItem();
+		OutputDebugStringW(SelectedText.c_str());
+		OutputDebugStringW(L"\n");
+
+
 		if (voice1 != nullptr)
 		{
 			// create voice
 		}
+		else
+		{
+
+		}
 	}
 	return 0;
-	
+
 	case WM_CM_PAUSEMUSIC:
 	{
 		OutputDebugStringW(L"Pause playing\n");
@@ -471,10 +491,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	{
 		return 1;
 	}
-	if (!SliderRegisterClass(hInst))
-	{
-		return 2;
-	}
+	
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
 	{

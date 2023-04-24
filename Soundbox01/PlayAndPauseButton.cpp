@@ -4,7 +4,7 @@
 
 namespace tretton63
 {
-	PlayAndPauseTransition 
+	PlayAndPauseTransition
 		PlayAndPause_GetState(HWND self)
 	{
 		auto Caption = Win32Caption(self);
@@ -45,12 +45,12 @@ namespace tretton63
 		if (state == PlayAndPauseTransition::PLAY)
 		{
 			PlayAndPause_SetCaption(self, PlayAndPauseTransition::PAUSE);
-			SendMessage(parent, WM_CM_PAUSEMUSIC, 0, 0);
+			SendMessage(parent, WM_CM_PLAYMUSIC, 0, 0);
 		}
 		else if (state == PlayAndPauseTransition::PAUSE)
 		{
 			PlayAndPause_SetCaption(self, PlayAndPauseTransition::PLAY);
-			SendMessage(parent, WM_CM_PLAYMUSIC, 0, 0);
+			SendMessage(parent, WM_CM_PAUSEMUSIC, 0, 0);
 		}
 
 	}

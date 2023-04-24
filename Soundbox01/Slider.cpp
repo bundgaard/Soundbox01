@@ -4,16 +4,62 @@
 
 namespace tretton63
 {
-	constexpr int ThumbWidth = 18;
-	constexpr int ThumbHeight = 18;
-	constexpr wchar_t ThumbCaption_1[] = L"MAX";
-	constexpr wchar_t ThumbCaption_2[] = L"MIN";
 
-	Local int nPos;
-	Local bool MouseHeld;
+	
 
-	Local void
-		Slider_DrawText(HDC hdc, RECT* SliderRect)
+	Slider::Slider(HWND Parent, int x, int y, int width, int height)
+	{
+		WNDCLASSEX wc{};
+		wc.cbSize = sizeof(WNDCLASSEX);
+		wc.style = CS_HREDRAW | CS_VREDRAW;
+		wc.lpfnWndProc = (WNDPROC)&Slider::WndProc;
+		wc.lpszClassName = L"TRETTON63_SLIDER";
+		wc.hInstance = GetModuleHandleW(0);
+
+		RegisterClassEx(&wc);
+
+		m_hwnd = CreateWindowEx(
+			0,
+			wc.lpszClassName,
+			L"",
+			WS_VISIBLE | WS_CHILD | WS_BORDER,
+			x, y,
+			width, height,
+			Parent,
+			nullptr,
+			nullptr,
+			nullptr);
+		SetWindowLongPtrW(m_hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+		m_mouseHeld = false;
+		nPos = 0;
+
+	}
+
+	Slider::~Slider()
+	{
+		DestroyWindow(m_hwnd);
+	}
+
+	HWND Slider::Handle() const
+	{
+		return m_hwnd;
+	}
+
+	inline void Slider::OnPaint(HWND hwnd, PAINTSTRUCT& ps)
+	{
+		SelectObject(ps.hdc, ButtonFont);
+
+		RECT SliderBackground = Slider_GetRect(hwnd);
+		RECT Margin{ -5, 5, 5, -5 };
+
+		int x = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 4 + 2;
+		Slider_DrawBackground(ps.hdc, &SliderBackground, RGB(240, 240, 240));
+		Slider_DrawTrackline(ps.hdc, &SliderBackground, &Margin);
+		Slider_DrawText(ps.hdc, &SliderBackground);
+		Slider_DrawThumb(ps.hdc, &SliderBackground, &Margin, x, nPos);
+	}
+
+	inline void Slider::Slider_DrawText(HDC hdc, RECT* SliderRect)
 	{
 		SetTextColor(hdc, ForegroundColor);
 		// Slider max at top
@@ -22,8 +68,7 @@ namespace tretton63
 		DrawTextW(hdc, ThumbCaption_2, -1, SliderRect, DT_RIGHT | DT_SINGLELINE | DT_BOTTOM | DT_NOPREFIX);
 	}
 
-	Local void
-		Slider_DrawThumb(HDC hdc, RECT* SliderRect, RECT* Margin, int x, int y)
+	inline void Slider::Slider_DrawThumb(HDC hdc, RECT* SliderRect, RECT* Margin, int x, int y)
 	{
 		// Slider thumb
 		RECT SliderThumb{ 0,0,ThumbWidth, ThumbHeight };
@@ -49,8 +94,7 @@ namespace tretton63
 		}
 	}
 
-	Local void
-		Slider_DrawTrackline(HDC hdc, RECT* SliderBackground, RECT* Margin)
+	inline void Slider::Slider_DrawTrackline(HDC hdc, RECT* SliderBackground, RECT* Margin)
 	{
 		auto Old = SelectObject(hdc, TracklineColor.Value());
 		int x = SliderBackground->left + (SliderBackground->right - SliderBackground->left) / 4 + 2;
@@ -60,38 +104,21 @@ namespace tretton63
 		SelectObject(hdc, Old);
 	}
 
-	Local void
-		Slider_DrawBackground(HDC hdc, RECT* SliderBackground, COLORREF color)
+	inline void Slider::Slider_DrawBackground(HDC hdc, RECT* SliderBackground, COLORREF color)
 	{
 		SetBkMode(hdc, TRANSPARENT);
 		FillRect(hdc, SliderBackground, BackgroundBrush.Value());
 	}
 
-	Local inline RECT
-		Slider_GetRect(HWND hwnd)
+	inline RECT Slider::Slider_GetRect(HWND hwnd)
 	{
 		RECT SliderBackground{};
 		GetClientRect(hwnd, &SliderBackground);
 
 		return SliderBackground;
 	}
-	Local void
-		Slider_OnPaint(HWND hwnd, HDC hdc)
-	{
-		SelectObject(hdc, ButtonFont);
 
-		RECT SliderBackground = Slider_GetRect(hwnd);
-		RECT Margin{ -5, 5, 5, -5 };
-
-		int x = SliderBackground.left + (SliderBackground.right - SliderBackground.left) / 4 + 2;
-		Slider_DrawBackground(hdc, &SliderBackground, RGB(240, 240, 240));
-		Slider_DrawTrackline(hdc, &SliderBackground, &Margin);
-		Slider_DrawText(hdc, &SliderBackground);
-		Slider_DrawThumb(hdc, &SliderBackground, &Margin, x, nPos);
-	}
-
-	Local LRESULT CALLBACK
-		SliderProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+	inline LRESULT Slider::OnProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
 		switch (msg)
 		{
@@ -99,10 +126,11 @@ namespace tretton63
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hwnd, &ps);
-			Slider_OnPaint(hwnd, hdc);
+			OnPaint(hwnd, ps);
 			EndPaint(hwnd, &ps);
 		}
 		return 0;
+
 		case WM_ERASEBKGND:
 			return 1;
 		case WM_LBUTTONDOWN:
@@ -114,7 +142,7 @@ namespace tretton63
 			wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
 			OutputDebugStringW(Buf.data());
 			nPos = MouseY;
-			MouseHeld = true;
+			m_mouseHeld = true;
 			SetCapture(hwnd);
 		}
 		return 0;
@@ -126,7 +154,7 @@ namespace tretton63
 			std::array<wchar_t, 64> Buf{};
 			wsprintf(Buf.data(), L"%d,%d\n", MouseX, MouseY);
 			OutputDebugStringW(Buf.data());
-			MouseHeld = false;
+			m_mouseHeld = false;
 			nPos = MouseY;
 			ReleaseCapture();
 		}
@@ -135,52 +163,32 @@ namespace tretton63
 		{
 			auto MouseX = GET_X_LPARAM(lparam);
 			auto MouseY = GET_Y_LPARAM(lparam);
-			if (MouseHeld)
+			if (m_mouseHeld)
 			{
 				nPos = MouseY;
-				SendMessage(GetParent(hwnd), (WM_USER + 5), max(min(nPos, 100), 0), 0); // TODO: fix when we have a better structure.
+				SendMessage(
+					GetParent(hwnd),
+					WM_VOLUME_CHANGED,
+					max(min(nPos, 100), 0), 0); // TODO: fix when we have a better structure.
 				InvalidateRect(hwnd, NULL, FALSE);
 			}
 		}
 		return 0;
 		default:
-			return DefWindowProc(hwnd, msg, wparam, lparam);
+			return DefWindowProcW(hwnd, msg, wparam, lparam);
 		}
-		return 0;
+		return DefWindowProcW(hwnd, msg, wparam, lparam);
 	}
 
-	bool
-		SliderRegisterClass(HINSTANCE hInst)
+	inline LRESULT Slider::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
-		WNDCLASSEX wc{};
-		wc.cbSize = sizeof(WNDCLASSEX);
-		wc.style = CS_HREDRAW | CS_VREDRAW;
-		wc.lpfnWndProc = &SliderProc;
-		wc.lpszClassName = L"Slider";
-		wc.hInstance = hInst;
+		Slider* pSlider = reinterpret_cast<Slider*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+		if (pSlider != nullptr)
+		{
+			return pSlider->OnProc(hwnd, msg, wparam, lparam);
+		}
+		return DefWindowProcW(hwnd, msg, wparam, lparam);
 
-		return RegisterClassEx(&wc);
-	}
-
-	HWND
-		SliderCreateWindow(
-			HWND Parent,
-			HINSTANCE Instance,
-			int X, int Y,
-			int Width, int Height,
-			int MaxVal, int MinVal) // TODO: make a struct or class to collect all of this and make it available in the clamp function
-	{
-		HWND hwnd = CreateWindowEx(0,
-			L"Slider",
-			L"",
-			WS_VISIBLE | WS_CHILD | WS_BORDER,
-			X, Y,
-			Width, Height,
-			Parent,
-			nullptr,
-			Instance,
-			nullptr);
-		return hwnd;
 	}
 
 }
