@@ -49,156 +49,45 @@ Lines
 // Comment on a single line
 
 using namespace tretton63;
+
 Global wil::com_ptr<IXAudio2> audio;
 Global IXAudio2MasteringVoice* master;
 Global IXAudio2SourceVoice* voice1;
 
-Global HWND PauseAndPlayButton;
-Global HWND VoiceOneGetState;
-Global HWND MusicFile;
-Global HWND SoundProgress;
-Global HWND LoadFilesToList;
-Global HWND MusicList;
+Global wil::unique_hwnd PauseAndPlayButton;
+Global wil::unique_hwnd VoiceOneGetState;
+Global wil::unique_hwnd MusicFile;
+Global wil::unique_hwnd SoundProgress;
+Global wil::unique_hwnd LoadFilesToList;
+
+Global wil::unique_hwnd MusicList;
+Global wil::unique_hfont ButtonFont;
 
 std::unique_ptr<Slider> VolumeFader02;
 
-static wil::unique_hfont ButtonFont;
-//std::shared_ptr<Voice> voice1;
-Global WAVEFORMATEX WaveFormatEx;
+Global wil::unique_event EventFlushed;
 
-std::optional<WAVEDATA> g_Data;
-
-Global HANDLE hEvent = nullptr;
-Global PTP_WORK WorkItem = nullptr;
 Global bool MusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
 
-
-void NTAPI
-TaskHandler(PTP_CALLBACK_INSTANCE Instance, PVOID Context, PTP_WORK Work)
+Local XAUDIO2_BUFFER*
+LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 {
-	wchar_t Buf[64] = { 0 };
-	wsprintf(Buf, L"Starting new work\n");
-	OutputDebugStringW(Buf);
-	memset(Buf, 0, sizeof(wchar_t) * 64);
-	wsprintf(Buf, L"WaveFormatEx information %d; Size=%zd\n", WaveFormatEx.nChannels, g_Data.has_value() ? g_Data->WaveSize : 0);
-	OutputDebugString(Buf);
-
-}
-
-
-Local std::unique_ptr<XAUDIO2_BUFFER>
-LoadBuffer(WAVEDATA const& Data)
-{
-	std::unique_ptr<XAUDIO2_BUFFER> XBuffer = std::make_unique<XAUDIO2_BUFFER>();
-
-	if (Data.WaveSize <= UINT32_MAX)
-		XBuffer->AudioBytes = static_cast<uint32_t>(Data.WaveSize);
+	XAUDIO2_BUFFER* XBuffer = new XAUDIO2_BUFFER{};
+	EventFlushed.create(wil::EventOptions::ManualReset, L"Xaudio flush event", nullptr, nullptr);
+	if (Data->WaveSize <= XAUDIO2_MAX_BUFFER_BYTES)
+		XBuffer->AudioBytes = static_cast<uint32_t>(Data->WaveSize);
 	else
 	{
 		OutputDebugString(L"Failed to resize the WaveSize\n");
 	}
 	XBuffer->Flags = XAUDIO2_END_OF_STREAM;
-	XBuffer->pAudioData = (LPBYTE)Data.Location;
+	XBuffer->pAudioData = (LPBYTE)Data->Location;
+	XBuffer->pContext = EventFlushed.get();
 	return XBuffer;
 }
-Local void DummyFunctionForLoadingMusic(HWND self)
-{
-	// Separate out the load of the music and the change of text into something better.
-	auto Text = Win32Caption(self);
-	auto Index = ListBox_GetCurSel(MusicList);
-	auto Selection = ListBox_GetCurSel(MusicList);
-	Local int PreviousIndex;
-	// TODO: figure out how to release the buffer and reload...
-	wchar_t IndexOut[64] = { 0 };
-	swprintf(IndexOut, 64, L"Index %d\n", Index);
-	OutputDebugString(IndexOut);
-	if (Index != nPos && voice1 != nullptr)
-	{
-		OutputDebugString(L"We have to reload the music...\n");
-		HRESULT hr = voice1->FlushSourceBuffers();
-
-		if (SUCCEEDED(hr))
-		{
-			// ReloadMusic();
-
-		}
-
-	}
-
-	if (Index != -1 && wcscmp(Text->c_str(), L"Play\0") == 0)
-	{
-
-		auto TextLen = ListBox_GetTextLen(MusicList, Index);
-		std::wstring Text;
-		Text.resize(TextLen);
-		ListBox_GetText(MusicList, Index, Text.data());
-
-		SetWindowTextW(self, L"Pause");
-		HRESULT hr = S_OK;
-		// Ask for current selection of MusicList
-
-		OutputDebugStringW(L"");
-
-		if (voice1 == nullptr)
-		{
-			auto Data = LoadWaveMMap(&WaveFormatEx, Text.data());
-
-			if (Data.has_value())
-			{
-
-				if (SUCCEEDED(hr))
-				{
-					OutputDebugString(L"CreateSourceVoice\n");
-					hr = audio->CreateSourceVoice(&voice1, &WaveFormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
-				}
-
-				if (Data->Location)
-				{
-					OutputDebugStringW(L"Try and play the note");
-					auto XBuffer = LoadBuffer(Data.value());
-					voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
-					hr = voice1->SubmitSourceBuffer(XBuffer.get());
-					MusicLoaded = true;
-					g_Data = Data;
-					SubmitThreadpoolWork(WorkItem);
-				}
-
-
-				if (FAILED(hr))
-				{
-					DWORD dwError = GetLastError();
-					if (dwError != 0x00)
-					{
-						printf("0x%x\n", dwError);
-						printf("failed to create Voice\n");
-					}
-				}
-			}
-		}
-
-		if (voice1 && MusicLoaded)
-		{
-			if (SUCCEEDED(hr))
-			{
-				hr = voice1->Start();
-			}
-		}
-	}
-	else
-	{
-		if (!MusicLoaded)
-			return;
-		SetWindowTextW(self, L"Play");
-
-		voice1->Stop();
-	}
-
-}
-
-
 
 
 Local void
@@ -225,19 +114,16 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	int Offset = 30;
 
 
-	HRESULT hr = S_OK;
-
-	hEvent = CreateEvent(nullptr, true, false, nullptr);
 
 	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
+	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height));
 
-	PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
 	posY += Offset;
-	VoiceOneGetState = Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height);
+	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height));
 	posY += Offset;
 	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", (WM_USER + 4), posX, posY, Width, Height);
 	posY += Offset;
-	MusicFile = CreateWindow(L"EDIT",
+	MusicFile.reset(CreateWindow(L"EDIT",
 		L"C:\\Code",
 		WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
 		posX, posY,
@@ -245,12 +131,12 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 		hwnd,
 		(HMENU)WM_USER + 3,
 		GetModuleHandleW(nullptr),
-		nullptr);
+		nullptr));
 	posY += Offset;
 
-	auto MusicLocationCaption = Win32Caption(MusicFile);
+	auto MusicLocationCaption = Win32Caption(MusicFile.get());
 
-	HDC hdc = GetDC(MusicFile);
+	HDC hdc = GetDC(MusicFile.get());
 	TEXTMETRICW Metrics{};
 	GetTextMetricsW(hdc, &Metrics);
 	SelectObject(hdc, ButtonFont.get());
@@ -258,19 +144,21 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	SIZE S{};
 	if (MusicLocationCaption->size() <= INT_MAX)
 		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
-	SetWindowPos(MusicFile, nullptr, 0, 0, S.cx + 15, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
-	ReleaseDC(MusicFile, hdc);
+	SetWindowPos(MusicFile.get(), nullptr, 0, 0, S.cx + 15, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
+	ReleaseDC(MusicFile.get(), hdc);
 
-	MusicList = Win32CreateListbox(hwnd, posX, posY, Width, 150);
+	MusicList.reset(Win32CreateListbox(hwnd, posX, posY, Width, 150));
 
-	Win32SetFont(PauseAndPlayButton, ButtonFont.get());
-	Win32SetFont(VoiceOneGetState, ButtonFont.get());
-	Win32SetFont(MusicFile, ButtonFont.get());
+	Win32SetFont(PauseAndPlayButton.get(), ButtonFont.get());
+	Win32SetFont(VoiceOneGetState.get(), ButtonFont.get());
+	Win32SetFont(MusicFile.get(), ButtonFont.get());
 	Win32SetFont(LoadFilesToList, ButtonFont.get());
-	Win32SetFont(MusicList, ButtonFont.get());
+	Win32SetFont(MusicList.get(), ButtonFont.get());
 
 	VolumeFader02 = std::make_unique<Slider>(hwnd, 500, 10, 64, 128); // TODO: reimplement min and max
 	Win32SetFont(VolumeFader02->Handle(), ButtonFont.get());
+
+	HRESULT hr = S_OK;
 
 	if (SUCCEEDED(hr))
 	{
@@ -293,15 +181,17 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 Local void
 OnDestroy(HWND hwnd)
 {
+
 	if (voice1)
-		voice1->FlushSourceBuffers();
-	if (g_Data.has_value() && g_Data->Location)
 	{
-		VirtualFree(g_Data->Location, 0, MEM_FREE);
-		g_Data->Location = nullptr;
+		voice1->FlushSourceBuffers();
+		voice1->DestroyVoice();
 	}
+
 	if (master)
+	{
 		master->DestroyVoice();
+	}
 
 	OutputDebugString(L"Should have emptied all now\n");
 	PostQuitMessage(0);
@@ -339,27 +229,27 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 	{
 	case PauseAndPlayEvent:
 	{
-		PlayAndPause_OnClick(PauseAndPlayButton, Parent);
+		PlayAndPause_OnClick(PauseAndPlayButton.get(), Parent);
 	}
 	break;
 	case VoiceOneGetStateEvent:
 	{
-		VoiceOne_OnClick(VoiceOneGetState);
+		VoiceOne_OnClick(VoiceOneGetState.get());
 	}
 	break;
 	case WM_CM_LOADFILES:
 	{
-		auto Path = Win32Caption(MusicFile);
+		auto Path = Win32Caption(MusicFile.get());
 		if (Path.has_value())
 		{
 			std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
-			ListBox_ResetContent(MusicList);
-			HDC hdc = GetDC(MusicList);
+			ListBox_ResetContent(MusicList.get());
+			HDC hdc = GetDC(MusicList.get());
 			int LongestWidth = 0;
 			int LongestHeight = 0;
 			for (auto const& Filename : Files)
 			{
-				ListBox_AddString(MusicList, Filename.c_str());
+				ListBox_AddString(MusicList.get(), Filename.c_str());
 				if (Filename.size() < INT_MAX)
 				{
 					SIZE TextSize{};
@@ -375,14 +265,14 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 					OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
 				}
 			}
-			ReleaseDC(MusicList, hdc);
+			ReleaseDC(MusicList.get(), hdc);
 
 			RECT MusicListRect{};
-			GetWindowRect(MusicList, &MusicListRect);
+			GetWindowRect(MusicList.get(), &MusicListRect);
 			MusicListRect.right = LongestWidth;
 			MusicListRect.bottom = LongestHeight < 50 ? LongestHeight + 5 : LongestHeight;
-			SetWindowPos(MusicList, nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
-			ShowWindow(MusicList, SW_SHOW);
+			SetWindowPos(MusicList.get(), nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
+			ShowWindow(MusicList.get(), SW_SHOW);
 		}
 	}
 	break;
@@ -392,18 +282,72 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 
 Local std::wstring MusicList_GetSelectedItem()
 {
-	auto SelectedIndex = ListBox_GetCurSel(MusicList);
-	auto SelectedTextLength = ListBox_GetTextLen(MusicList, SelectedIndex);
+	auto SelectedIndex = ListBox_GetCurSel(MusicList.get());
+	auto SelectedTextLength = ListBox_GetTextLen(MusicList.get(), SelectedIndex);
 	std::wstring SelectedText(SelectedTextLength + 1, L'\0');
-	ListBox_GetText(MusicList, SelectedIndex, SelectedText.data());
+	ListBox_GetText(MusicList.get(), SelectedIndex, SelectedText.data());
 	SelectedText.resize(SelectedTextLength);
 	return SelectedText;
 }
 
+Global std::unique_ptr<WAVEDATA> g_Data;
+Global XAUDIO2_BUFFER* Buffer;
 
+Global std::wstring PreviousSelectedText;
+
+Local void CreateVoiceWithFile(std::wstring const& SelectedText)
+{
+	// create voice
+		// Load File from LoadWave
+	WAVEFORMATEX FormatEx{};
+	g_Data = LoadWaveMMap(&FormatEx, SelectedText);
+	HRESULT hr = S_OK;
+	if (SUCCEEDED(hr))
+	{
+		hr = audio->CreateSourceVoice(&voice1, &FormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
+		OutputDebugStringW(L"CreateSourceVoice\n");
+	}
+	if (SUCCEEDED(hr))
+	{
+		hr = voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
+		OutputDebugStringW(L"SetVolume\n");
+	}
+	if (SUCCEEDED(hr))
+	{
+		OutputDebugStringW(L"Foobarfish\n");
+
+		Buffer = LoadBuffer(g_Data);
+		hr = voice1->SubmitSourceBuffer(Buffer);
+
+		if (SUCCEEDED(hr))
+		{
+			hr = voice1->Start(XAUDIO2_COMMIT_NOW);
+			PreviousSelectedText = SelectedText;
+		}
+		if (FAILED(hr))
+		{
+			OutputDebugStringW(L"Failed to play\n");
+		}
+	}
+	if (FAILED(hr))
+	{
+		DWORD dwError = GetLastError();
+		if (dwError != 0x00)
+		{
+			OutputDebugStringW(L"Failed to create and configure voice\n");
+			wchar_t Buf[64] = { 0 };
+			swprintf(Buf, 64, L"dwError %x\n", dwError);
+			OutputDebugStringW(Buf);
+
+		}
+
+	}
+}
 LRESULT CALLBACK
 SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+
+
 	switch (msg)
 	{
 
@@ -440,58 +384,47 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		if (voice1 != nullptr)
 		{
+			if (SelectedText != PreviousSelectedText)
+			{
+				OutputDebugStringW(L"Reload music\n");
+				HRESULT hr = S_OK;
 
+				if (SUCCEEDED(hr))
+				{
+					hr = voice1->FlushSourceBuffers();			
+					
+					OutputDebugStringW(L"Wait for flushing\n");
+				}
 
+				if (SUCCEEDED(hr))
+				{
+					voice1->DestroyVoice();
+					OutputDebugStringW(L"Flush buffers OK\n");
+					if (g_Data && g_Data->Location)
+					{
+						OutputDebugStringW(L"Clear memory\n");
+						if (!VirtualFree(g_Data->Location, 0, MEM_RELEASE))
+						{
+							
+							DWORD dwError = GetLastError();
+							wchar_t Buf[64] = { 0 };
+							swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
+							OutputDebugStringW(Buf);
+						}
+						g_Data.release();
 
-
+					}
+				}
+				CreateVoiceWithFile(SelectedText);
+			}
+			else
+			{
+				voice1->Start();
+			}
 		}
 		else
 		{
-			// create voice
-			// Load File from LoadWave
-			WAVEFORMATEX FormatEx{};
-			auto Data = LoadWaveMMap(&FormatEx, SelectedText);
-			HRESULT hr = S_OK;
-			if (SUCCEEDED(hr))
-			{
-				hr = audio->CreateSourceVoice(&voice1, &FormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
-				OutputDebugStringW(L"CreateSourceVoice\n");
-			}
-			if (SUCCEEDED(hr))
-			{
-				hr = voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
-				OutputDebugStringW(L"SetVolume\n");
-			}
-			if (SUCCEEDED(hr))
-			{
-				OutputDebugStringW(L"Foobarfish\n");
-				if (Data.has_value())
-				{
-					auto Buffer = LoadBuffer(*Data);
-					hr = voice1->SubmitSourceBuffer(Buffer.get());
-				}
-				if (SUCCEEDED(hr))
-				{
-					hr = voice1->Start(XAUDIO2_COMMIT_NOW);
-				}
-				if (FAILED(hr))
-				{
-					OutputDebugStringW(L"Failed to play\n");
-				}
-			}
-			if (FAILED(hr))
-			{
-				DWORD dwError = GetLastError();
-				if (dwError != 0x00)
-				{
-					OutputDebugStringW(L"Failed to create and configure voice\n");
-					wchar_t Buf[64] = { 0 };
-					swprintf(Buf, 64, L"dwError %x\n", dwError);
-					OutputDebugStringW(Buf);
-					
-				}
-
-			}
+			CreateVoiceWithFile(SelectedText);
 		}
 	}
 	return 0;
@@ -522,12 +455,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	IccEx.dwICC = ICC_STANDARD_CLASSES;
 
 	InitCommonControlsEx(&IccEx);
-	WorkItem = CreateThreadpoolWork(TaskHandler, nullptr, nullptr);
-	if (WorkItem == nullptr)
-	{
-		OutputDebugStringW(L"Failed to create work item\n");
-		return -2;
-	}
 
 	if (FAILED(hr))
 	{
@@ -557,6 +484,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	}
 
 	DestroyWindow(hwnd);
-	CloseThreadpoolWork(WorkItem);
+
 	return 0;
 }

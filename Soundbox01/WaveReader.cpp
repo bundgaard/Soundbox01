@@ -53,10 +53,10 @@ namespace tretton63
 		OutputDebugStringW(Buffer);
 	}
 
-	std::optional<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
+	std::unique_ptr<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename = L"C:\\Code\\10562542_Liquid_Times_Original_Mix.wav")
 	{
 
-		WAVEDATA Result{};
+		std::unique_ptr<WAVEDATA> Result = std::make_unique<WAVEDATA>();
 
 		HANDLE SoundFile = CreateFile(Filename.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 		DWORD dwError = GetLastError();
@@ -84,29 +84,23 @@ namespace tretton63
 				View = MapViewOfFile(SoundFileMapping, FILE_MAP_READ, 0, 0, 0);
 				if (View)
 				{
-					OutputDebugString(L"Before\n");
 					size_t WaveChunkOffset = FindChunk(Wave, (uint8_t*)View, 0, SoundFileSize.QuadPart);
 					size_t FmtChunkOffset = FindChunk(Fmt, (uint8_t*)View, WaveChunkOffset, SoundFileSize.QuadPart);
 					uint32_t FmtChunkSize = ReadChunkAt<uint32_t>((uint8_t*)View, FmtChunkOffset + sizeof(uint32_t));
 					size_t DataChunkOffset = FindChunk(Data, (uint8_t*)View, FmtChunkOffset, SoundFileSize.QuadPart);
 					uint32_t DataChunkSize = ReadChunkAt<uint32_t>((uint8_t*)View, DataChunkOffset + sizeof(uint32_t));
 
-					Result.WaveSize = DataChunkSize;
+					Result->WaveSize = DataChunkSize;
 					WaveFormatEx->cbSize = FmtChunkSize;
 					memcpy_s(WaveFormatEx, sizeof(WAVEFORMATEX), ((uint8_t*)View + FmtChunkOffset + sizeof(uint32_t) * 2), FmtChunkSize); // size of the size of the formatlength (uint32_t) and skipping it +4
 
-					printf("Fmt offset %zd\n", FmtChunkOffset);
-					printf("Fmt size %u\n", FmtChunkSize);
-					printf("Data offset %zd\n", DataChunkOffset);
-					printf("Data size %u\n", DataChunkSize);
 					PrintWaveFormat(WaveFormatEx, DataChunkSize);
 
-					Result.Location = VirtualAlloc(nullptr, DataChunkSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-					if (Result.Location)
+					Result->Location = VirtualAlloc(nullptr, DataChunkSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+					if (Result->Location)
 					{
-						OutputDebugString(L"Allocate music buffer\n");
-						printf("Allocated soundbuffer %zd\n", DataChunkOffset + sizeof(uint32_t) * 2);
-						memcpy_s(Result.Location, DataChunkSize, (uint8_t*)View + DataChunkOffset + sizeof(uint32_t) * 2, DataChunkSize);
+						OutputDebugStringW(L"Allocate music buffer\n");
+						memcpy_s(Result->Location, DataChunkSize, (uint8_t*)View + DataChunkOffset + sizeof(uint32_t) * 2, DataChunkSize);
 					}
 				}
 			}

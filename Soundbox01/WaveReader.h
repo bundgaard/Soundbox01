@@ -2,10 +2,12 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <mmeapi.h>
+
 #include <cstdint>
 #include <cstdio>
-#include <optional>
+
 #include <string>
+#include <memory>
 
 namespace tretton63
 {
@@ -39,6 +41,6 @@ namespace tretton63
 	};
 
 	void PrintWaveFormat(WAVEFORMATEX* wf, uint32_t WaveDataSize);
-	std::optional<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename);
+	std::unique_ptr<WAVEDATA> LoadWaveMMap(WAVEFORMATEX* WaveFormatEx, const std::wstring& Filename);
 
 }
