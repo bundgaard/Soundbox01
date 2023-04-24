@@ -4,9 +4,6 @@
 
 namespace tretton63
 {
-
-	
-
 	Slider::Slider(HWND Parent, int x, int y, int width, int height)
 	{
 		WNDCLASSEX wc{};
@@ -47,8 +44,6 @@ namespace tretton63
 
 	inline void Slider::OnPaint(HWND hwnd, PAINTSTRUCT& ps)
 	{
-		SelectObject(ps.hdc, ButtonFont);
-
 		RECT SliderBackground = Slider_GetRect(hwnd);
 		RECT Margin{ -5, 5, 5, -5 };
 

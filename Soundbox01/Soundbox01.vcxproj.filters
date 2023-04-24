@@ -89,5 +89,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
+    <None Include="vcpkg.json" />
   </ItemGroup>
 </Project>

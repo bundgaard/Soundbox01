@@ -3,7 +3,6 @@
 #include "WindowMessages.h"
 #include "Styleguide.h"
 #include <array>
-extern HFONT ButtonFont;
 
 namespace tretton63
 {

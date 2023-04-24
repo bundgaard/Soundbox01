@@ -22,6 +22,8 @@
 #include "Voice.h"
 #include "PlayAndPauseButton.h"
 #include "WindowMessages.h"
+#include <wil/resource.h>
+
 
 /*
 Chart
@@ -60,7 +62,7 @@ Global HWND MusicList;
 
 std::unique_ptr<Slider> VolumeFader02;
 
-HFONT ButtonFont;
+static wil::unique_hfont ButtonFont;
 //std::shared_ptr<Voice> voice1;
 Global WAVEFORMATEX WaveFormatEx;
 
@@ -226,8 +228,8 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	HRESULT hr = S_OK;
 	
 	hEvent = CreateEvent(nullptr, true, false, nullptr);
-
-	ButtonFont = Win32CreateFont(L"Tahoma", 14);
+	
+	ButtonFont.reset(Win32CreateFont(L"Tahoma", 14));
 
 	PauseAndPlayButton = Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height);
 	posY += Offset;
@@ -251,7 +253,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	HDC hdc = GetDC(MusicFile);
 	TEXTMETRICW Metrics{};
 	GetTextMetricsW(hdc, &Metrics);
-	SelectObject(hdc, ButtonFont);
+	SelectObject(hdc, ButtonFont.get());
 	
 	SIZE S{};
 	if (MusicLocationCaption->size() <= INT_MAX)
@@ -261,14 +263,15 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 
 	MusicList = Win32CreateListbox(hwnd, posX, posY, Width, 150);
 	
-	Win32SetFont(PauseAndPlayButton, ButtonFont);
-	Win32SetFont(VoiceOneGetState, ButtonFont);
-	Win32SetFont(MusicFile, ButtonFont);
-	Win32SetFont(LoadFilesToList, ButtonFont);
-	Win32SetFont(MusicList, ButtonFont);
+	Win32SetFont(PauseAndPlayButton, ButtonFont.get());
+	Win32SetFont(VoiceOneGetState, ButtonFont.get());
+	Win32SetFont(MusicFile, ButtonFont.get());
+	Win32SetFont(LoadFilesToList, ButtonFont.get());
+	Win32SetFont(MusicList, ButtonFont.get());
 
 	VolumeFader02 = std::make_unique<Slider>(hwnd, 500, 10, 64, 128); // TODO: reimplement min and max
-	
+	Win32SetFont(VolumeFader02->Handle(), ButtonFont.get());
+
 	if (SUCCEEDED(hr))
 	{
 		hr = XAudio2Create(&audio);
@@ -290,8 +293,6 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 Local void
 OnDestroy(HWND hwnd)
 {
-	if (ButtonFont)
-		DeleteObject(ButtonFont);
 	if (voice1)
 		voice1->FlushSourceBuffers();
 	if (g_Data.has_value() && g_Data->Location)
