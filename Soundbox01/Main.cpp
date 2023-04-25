@@ -15,6 +15,7 @@
 
 #include "Styleguide.h"
 
+#include "Window.h"
 #include "Defer.h"
 #include "Win32Layer.h"
 #include "Files.h"
@@ -182,7 +183,7 @@ Local void
 OnDestroy(HWND hwnd)
 {
 
-	if (voice1)
+	if (voice1 != nullptr)
 	{
 		voice1->FlushSourceBuffers();
 		voice1->DestroyVoice();
@@ -346,11 +347,8 @@ Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 LRESULT CALLBACK
 SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-
-
 	switch (msg)
 	{
-
 		HANDLE_MSG(hwnd, WM_CREATE, OnCreate);
 		HANDLE_MSG(hwnd, WM_DRAWITEM, OnDrawItem);
 		HANDLE_MSG(hwnd, WM_CTLCOLORBTN, OnColorButton);
@@ -446,26 +444,60 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 }
 
+template<typename T>
+std::string getString(T const& t)
+{
+	std::string s;
+	if constexpr (std::is_same_v<std::decay_t<T>, std::string>)
+	{
+		s = t;
+	}
+	else
+	{
+		s = std::to_string(t);
+	}
+	return s;
+}
+
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
+#if 0
+	{
+		int a = 5;
+		float b = 10.02f; // truncation error
+		std::string c("ketan");
+
+		OutputDebugStringA(getString(a).c_str());
+		OutputDebugStringA("\n");
+		OutputDebugStringA(getString(b).c_str());
+		OutputDebugStringA("\n");
+		OutputDebugStringA(getString(c).c_str());
+		OutputDebugStringA("\n");
+
+}
+#endif 
+
+
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
+
 	INITCOMMONCONTROLSEX IccEx{};
 	IccEx.dwSize = sizeof(INITCOMMONCONTROLSEX);
 	IccEx.dwICC = ICC_STANDARD_CLASSES;
-
 	InitCommonControlsEx(&IccEx);
 
-	if (FAILED(hr))
-	{
-		OutputDebugString(L"Failed to do CoInitialize\n");
-		return 1;
-	}
+	
 	HBRUSH hbrBackground = CreateSolidBrush(to_rgb(0x003600ff));
 	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground))
 	{
+		OutputDebugStringW(L"Cannot register class name\n");
 		return 1;
 	}
+	Window frame(
+		10, 10,
+		250, 250,
+		hbrBackground,
+		L"Hello, World");
 
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
@@ -476,6 +508,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	UpdateWindow(hwnd);
 	ShowWindow(hwnd, nCmdShow);
 
+	UpdateWindow(frame.Handle());
+	ShowWindow(frame.Handle(), SW_SHOW);
+
 	MSG msg{};
 	while (GetMessageW(&msg, nullptr, 0, 0) > 0)
 	{
@@ -484,6 +519,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	}
 
 	DestroyWindow(hwnd);
+	DeleteObject(hbrBackground);
 
 	return 0;
 }
