@@ -15,7 +15,6 @@
 
 #include "Styleguide.h"
 
-#include "Window.h"
 #include "Defer.h"
 #include "Win32Layer.h"
 #include "Files.h"
@@ -113,8 +112,6 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	int Width = 100;
 	int Height = 25;
 	int Offset = 30;
-
-
 
 	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
 	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height));
@@ -295,6 +292,19 @@ Global std::unique_ptr<WAVEDATA> g_Data;
 Global XAUDIO2_BUFFER* Buffer;
 
 Global std::wstring PreviousSelectedText;
+struct CallbackData : public IXAudio2VoiceCallback
+{
+	IXAudio2SourceVoice* pVoice;
+	uint32_t totalSample;
+	uint32_t currentSample;
+};
+
+void __stdcall MyCallback(void* pContext, XAUDIO2_BUFFER* pBuffer)
+{
+	CallbackData* pData = static_cast<CallbackData*>(pContext);
+	OutputDebugStringW(std::to_wstring(pData->currentSample).c_str());
+	OutputDebugStringW(L"\n");
+}
 
 Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 {
@@ -305,7 +315,11 @@ Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 	HRESULT hr = S_OK;
 	if (SUCCEEDED(hr))
 	{
-		hr = audio->CreateSourceVoice(&voice1, &FormatEx, 0, XAUDIO2_DEFAULT_FREQ_RATIO);
+		hr = audio->CreateSourceVoice(
+			&voice1,
+			&FormatEx,
+			0,
+			XAUDIO2_DEFAULT_FREQ_RATIO);
 		OutputDebugStringW(L"CreateSourceVoice\n");
 	}
 	if (SUCCEEDED(hr))
@@ -389,8 +403,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 				if (SUCCEEDED(hr))
 				{
-					hr = voice1->FlushSourceBuffers();			
-					
+					hr = voice1->FlushSourceBuffers();
+
 					OutputDebugStringW(L"Wait for flushing\n");
 				}
 
@@ -403,7 +417,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 						OutputDebugStringW(L"Clear memory\n");
 						if (!VirtualFree(g_Data->Location, 0, MEM_RELEASE))
 						{
-							
+
 							DWORD dwError = GetLastError();
 							wchar_t Buf[64] = { 0 };
 							swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
@@ -444,6 +458,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	}
 }
 
+#if 0
 template<typename T>
 std::string getString(T const& t)
 {
@@ -458,26 +473,24 @@ std::string getString(T const& t)
 	}
 	return s;
 }
-
-int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
-#if 0
-	{
-		int a = 5;
-		float b = 10.02f; // truncation error
-		std::string c("ketan");
+	int a = 5;
+	float b = 10.02f; // truncation error
+	std::string c("ketan");
 
-		OutputDebugStringA(getString(a).c_str());
-		OutputDebugStringA("\n");
-		OutputDebugStringA(getString(b).c_str());
-		OutputDebugStringA("\n");
-		OutputDebugStringA(getString(c).c_str());
-		OutputDebugStringA("\n");
+	OutputDebugStringA(getString(a).c_str());
+	OutputDebugStringA("\n");
+	OutputDebugStringA(getString(b).c_str());
+	OutputDebugStringA("\n");
+	OutputDebugStringA(getString(c).c_str());
+	OutputDebugStringA("\n");
 
 }
 #endif 
 
 
+int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
+{
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 
@@ -486,18 +499,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	IccEx.dwICC = ICC_STANDARD_CLASSES;
 	InitCommonControlsEx(&IccEx);
 
-	
+
 	HBRUSH hbrBackground = CreateSolidBrush(to_rgb(0x003600ff));
 	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground))
 	{
 		OutputDebugStringW(L"Cannot register class name\n");
 		return 1;
 	}
-	Window frame(
-		10, 10,
-		250, 250,
-		hbrBackground,
-		L"Hello, World");
+
 
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
 	if (hwnd == nullptr)
@@ -508,8 +517,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	UpdateWindow(hwnd);
 	ShowWindow(hwnd, nCmdShow);
 
-	UpdateWindow(frame.Handle());
-	ShowWindow(frame.Handle(), SW_SHOW);
 
 	MSG msg{};
 	while (GetMessageW(&msg, nullptr, 0, 0) > 0)

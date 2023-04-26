@@ -7,23 +7,27 @@
 namespace tretton63
 {
 	ATOM
-		Win32RegisterClass(HINSTANCE hInst, WNDPROC aWndProc, HBRUSH hbrBackground = (HBRUSH)GetStockObject(COLOR_APPWORKSPACE + 1))
+		Win32RegisterClass(
+			HINSTANCE hInst,
+			WNDPROC aWndProc,
+			HBRUSH hbrBackground,
+			std::wstring const& Classname)
 	{
 		WNDCLASSEX wc{};
 		wc.cbSize = sizeof(WNDCLASSEX);
 		wc.hInstance = hInst;
-		wc.lpszClassName = CCLASSNAME;
+		wc.lpszClassName = Classname.c_str();
 		wc.hbrBackground = hbrBackground;
 		wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
 		wc.hIconSm = wc.hIcon;
 		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 		wc.lpfnWndProc = (WNDPROC)aWndProc;
-		wc.style = CS_HREDRAW | CS_VREDRAW;
+		wc.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
 		return RegisterClassEx(&wc);
 	}
 
 	HFONT
-		Win32CreateFont(std::wstring const& Fontface, int FontSize, int Weight = FW_NORMAL )
+		Win32CreateFont(std::wstring const& Fontface, int FontSize, int Weight = FW_NORMAL)
 	{
 		HFONT Font = CreateFontW(
 			FontSize,
@@ -61,6 +65,7 @@ namespace tretton63
 			nullptr);
 	}
 
+	
 	std::optional<std::wstring>
 		Win32Caption(HWND hwnd)
 	{

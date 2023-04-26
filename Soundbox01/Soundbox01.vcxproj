@@ -136,7 +136,6 @@
     <ClCompile Include="Audio.cpp" />
     <ClCompile Include="Defer.cpp" />
     <ClCompile Include="Files.cpp" />
-    <ClCompile Include="Frame.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="PlayAndPauseButton.cpp" />
     <ClCompile Include="riddle.cpp" />
@@ -145,7 +144,6 @@
     <ClCompile Include="Voice.cpp" />
     <ClCompile Include="WaveReader.cpp" />
     <ClCompile Include="Win32Layer.cpp" />
-    <ClCompile Include="Window.cpp" />
     <ClCompile Include="WindowMessages.h" />
   </ItemGroup>
   <ItemGroup>
@@ -153,7 +151,6 @@
     <ClInclude Include="Audio.h" />
     <ClInclude Include="Defer.h" />
     <ClInclude Include="Files.h" />
-    <ClInclude Include="Frame.h" />
     <ClInclude Include="GenerateSound.h" />
     <ClInclude Include="PlayAndPauseButton.h" />
     <ClInclude Include="Slider.h" />
@@ -162,7 +159,6 @@
     <ClInclude Include="Voice.h" />
     <ClInclude Include="WaveReader.h" />
     <ClInclude Include="Win32Layer.h" />
-    <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />
