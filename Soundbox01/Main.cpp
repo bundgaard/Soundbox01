@@ -244,7 +244,8 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 			ListBox_ResetContent(MusicList.get());
 			HDC hdc = GetDC(MusicList.get());
 			int LongestWidth = 0;
-			int LongestHeight = 0;
+			int LongestHeight = 1;
+			int TextHeight{};
 			for (auto const& Filename : Files)
 			{
 				ListBox_AddString(MusicList.get(), Filename.c_str());
@@ -256,7 +257,8 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 					{
 						LongestWidth = TextSize.cx;
 					}
-					LongestHeight += TextSize.cy;
+					TextHeight = TextSize.cy;
+					LongestHeight++;
 				}
 				else
 				{
@@ -268,7 +270,7 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 			RECT MusicListRect{};
 			GetWindowRect(MusicList.get(), &MusicListRect);
 			MusicListRect.right = LongestWidth;
-			MusicListRect.bottom = LongestHeight < 50 ? LongestHeight + 5 : LongestHeight;
+			MusicListRect.bottom = TextHeight * LongestHeight;
 			SetWindowPos(MusicList.get(), nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
 			ShowWindow(MusicList.get(), SW_SHOW);
 		}
@@ -292,22 +294,33 @@ Global std::unique_ptr<WAVEDATA> g_Data;
 Global XAUDIO2_BUFFER* Buffer;
 
 Global std::wstring PreviousSelectedText;
-struct CallbackData : public IXAudio2VoiceCallback
+class CallbackData : public IXAudio2VoiceCallback
 {
-	IXAudio2SourceVoice* pVoice;
-	uint32_t totalSample;
-	uint32_t currentSample;
+public:
+	CallbackData()
+	{
+		OutputDebugStringW(L"Callback ctor\n");
+	}
+	~CallbackData()
+	{
+		OutputDebugStringW(L"Callback dtor\n");
+	}
+	void OnStreamEnd() noexcept 
+	{
+		OutputDebugStringW(L"Stream ended\n");
+	}
+	void OnVoiceProcessingPassStart(UINT32 BytesRequired) noexcept { }
+	void OnVoiceProcessingPassEnd() noexcept {}
+	void OnBufferEnd(void* pContext) noexcept {}
+	void OnBufferStart(void* pContext)noexcept {}
+	void OnLoopEnd(void* pContext)noexcept {}
+	void OnVoiceError(void* pContext, HRESULT Error) noexcept {}
+
 };
-
-void __stdcall MyCallback(void* pContext, XAUDIO2_BUFFER* pBuffer)
-{
-	CallbackData* pData = static_cast<CallbackData*>(pContext);
-	OutputDebugStringW(std::to_wstring(pData->currentSample).c_str());
-	OutputDebugStringW(L"\n");
-}
-
+std::unique_ptr<CallbackData> callback;
 Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 {
+	callback = std::make_unique<CallbackData>();
 	// create voice
 		// Load File from LoadWave
 	WAVEFORMATEX FormatEx{};
@@ -319,7 +332,7 @@ Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 			&voice1,
 			&FormatEx,
 			0,
-			XAUDIO2_DEFAULT_FREQ_RATIO);
+			XAUDIO2_DEFAULT_FREQ_RATIO, callback.get());
 		OutputDebugStringW(L"CreateSourceVoice\n");
 	}
 	if (SUCCEEDED(hr))
