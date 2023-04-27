@@ -22,10 +22,13 @@
 #include "Voice.h"
 #include "PlayAndPauseButton.h"
 #include "WindowMessages.h"
+#include "VoiceCallback.h"
 #include <wil/resource.h>
 #include <wil/com.h>
 
 
+using namespace tretton63;
+using CallbackData = VoiceCallback;
 /*
 Chart
 High Value rounded up
@@ -48,7 +51,7 @@ Lines
 
 // Comment on a single line
 
-using namespace tretton63;
+
 
 Global wil::com_ptr<IXAudio2> audio;
 Global IXAudio2MasteringVoice* master;
@@ -65,18 +68,23 @@ Global wil::unique_hfont ButtonFont;
 
 std::unique_ptr<Slider> VolumeFader02;
 
-Global wil::unique_event EventFlushed;
+Global wil::unique_event g_MusicEvent;
 
 Global bool MusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
+Global std::unique_ptr<WAVEDATA> g_Data;
+Global XAUDIO2_BUFFER* Buffer;
+Global std::wstring PreviousSelectedText;
+std::unique_ptr<CallbackData> callback; // TODO fix the naming
+
+
 
 Local XAUDIO2_BUFFER*
 LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 {
 	XAUDIO2_BUFFER* XBuffer = new XAUDIO2_BUFFER{};
-	EventFlushed.create(wil::EventOptions::ManualReset, L"Xaudio flush event", nullptr, nullptr);
 	if (Data->WaveSize <= XAUDIO2_MAX_BUFFER_BYTES)
 		XBuffer->AudioBytes = static_cast<uint32_t>(Data->WaveSize);
 	else
@@ -85,7 +93,7 @@ LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 	}
 	XBuffer->Flags = XAUDIO2_END_OF_STREAM;
 	XBuffer->pAudioData = (LPBYTE)Data->Location;
-	XBuffer->pContext = EventFlushed.get();
+
 	return XBuffer;
 }
 
@@ -104,6 +112,7 @@ VoiceOne_OnClick(HWND self)
 
 }
 
+
 Local BOOL
 OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 {
@@ -115,11 +124,11 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 
 	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
 	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height));
-
+	EnableWindow(PauseAndPlayButton.get(), false);
 	posY += Offset;
 	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height));
 	posY += Offset;
-	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", (WM_USER + 4), posX, posY, Width, Height);
+	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", WM_CM_LOADFILES, posX, posY, Width, Height);
 	posY += Offset;
 	MusicFile.reset(CreateWindow(L"EDIT",
 		L"C:\\Code",
@@ -140,8 +149,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	SelectObject(hdc, ButtonFont.get());
 
 	SIZE S{};
-	if (MusicLocationCaption->size() <= INT_MAX)
-		GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), static_cast<int>(MusicLocationCaption->size()), &S);
+	GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), narrow_cast<int>(MusicLocationCaption->size()), &S);
 	SetWindowPos(MusicFile.get(), nullptr, 0, 0, S.cx + 15, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
 	ReleaseDC(MusicFile.get(), hdc);
 
@@ -186,6 +194,18 @@ OnDestroy(HWND hwnd)
 		voice1->DestroyVoice();
 	}
 
+	if (g_Data != nullptr)
+	{
+		if (!VirtualFree(g_Data->Location, 0, MEM_RELEASE))
+		{
+			DWORD dwError = GetLastError();
+			wchar_t Buf[64] = { 0 };
+			swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
+			OutputDebugStringW(Buf);
+		}
+
+	}
+	
 	if (master)
 	{
 		master->DestroyVoice();
@@ -218,7 +238,6 @@ OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 	SetTextColor(hdc, RGB(0, 0, 255));
 	return (HBRUSH)GetStockObject(NULL_BRUSH);
 }
-
 
 Local void
 OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
@@ -273,6 +292,7 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 			MusicListRect.bottom = TextHeight * LongestHeight;
 			SetWindowPos(MusicList.get(), nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
 			ShowWindow(MusicList.get(), SW_SHOW);
+			EnableWindow(PauseAndPlayButton.get(), true);
 		}
 	}
 	break;
@@ -280,7 +300,8 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 
 }
 
-Local std::wstring MusicList_GetSelectedItem()
+Local std::wstring
+MusicList_GetSelectedItem()
 {
 	auto SelectedIndex = ListBox_GetCurSel(MusicList.get());
 	auto SelectedTextLength = ListBox_GetTextLen(MusicList.get(), SelectedIndex);
@@ -290,35 +311,8 @@ Local std::wstring MusicList_GetSelectedItem()
 	return SelectedText;
 }
 
-Global std::unique_ptr<WAVEDATA> g_Data;
-Global XAUDIO2_BUFFER* Buffer;
-
-Global std::wstring PreviousSelectedText;
-class CallbackData : public IXAudio2VoiceCallback
-{
-public:
-	CallbackData()
-	{
-		OutputDebugStringW(L"Callback ctor\n");
-	}
-	~CallbackData()
-	{
-		OutputDebugStringW(L"Callback dtor\n");
-	}
-	void OnStreamEnd() noexcept 
-	{
-		OutputDebugStringW(L"Stream ended\n");
-	}
-	void OnVoiceProcessingPassStart(UINT32 BytesRequired) noexcept { }
-	void OnVoiceProcessingPassEnd() noexcept {}
-	void OnBufferEnd(void* pContext) noexcept {}
-	void OnBufferStart(void* pContext)noexcept {}
-	void OnLoopEnd(void* pContext)noexcept {}
-	void OnVoiceError(void* pContext, HRESULT Error) noexcept {}
-
-};
-std::unique_ptr<CallbackData> callback;
-Local void CreateVoiceWithFile(std::wstring const& SelectedText)
+Local void
+CreateVoiceWithFile(std::wstring const& SelectedText)
 {
 	callback = std::make_unique<CallbackData>();
 	// create voice
@@ -349,7 +343,8 @@ Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 
 		if (SUCCEEDED(hr))
 		{
-			hr = voice1->Start(XAUDIO2_COMMIT_NOW);
+			hr = voice1->Start(XAUDIO2_COMMIT_NOW); // TODO: need to refactor this into one entry to play and pause as we now have double entries, which is confusing.
+			g_MusicEvent.SetEvent();
 			PreviousSelectedText = SelectedText;
 		}
 		if (FAILED(hr))
@@ -371,6 +366,7 @@ Local void CreateVoiceWithFile(std::wstring const& SelectedText)
 
 	}
 }
+
 LRESULT CALLBACK
 SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -380,6 +376,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		HANDLE_MSG(hwnd, WM_DRAWITEM, OnDrawItem);
 		HANDLE_MSG(hwnd, WM_CTLCOLORBTN, OnColorButton);
 		HANDLE_MSG(hwnd, WM_COMMAND, OnCommand);
+		HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
 
 	case WM_VOLUME_CHANGED:
 	{
@@ -445,6 +442,8 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			else
 			{
 				voice1->Start();
+				g_MusicEvent.SetEvent();
+
 			}
 		}
 		else
@@ -461,46 +460,47 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (voice1 != nullptr)
 		{
 			voice1->Stop(XAUDIO2_COMMIT_NOW);
+			g_MusicEvent.ResetEvent();
 		}
 	}
 	return 0;
 
-	HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
+
 	default:
 		return DefWindowProcW(hwnd, msg, wParam, lParam);
 	}
 }
 
-#if 0
-template<typename T>
-std::string getString(T const& t)
+DWORD WINAPI ThreadTracker(PVOID pArguments)
 {
-	std::string s;
-	if constexpr (std::is_same_v<std::decay_t<T>, std::string>)
+	UINT64 SamplePlayed{};
+
+	while (true)
 	{
-		s = t;
+		WaitForSingleObject(g_MusicEvent.get(), INFINITE);
+
+		if (voice1 != nullptr)
+		{
+			XAUDIO2_VOICE_STATE voiceState{};
+			voice1->GetState(&voiceState);
+
+			if (voiceState.SamplesPlayed != SamplePlayed)
+			{
+				std::wstringstream Buf{};
+				Buf << L"State "
+					<< std::to_wstring(voiceState.SamplesPlayed)
+					<< L" of "
+					<< std::to_wstring(voiceState.BuffersQueued)
+					<< L"\n";
+				OutputDebugStringW(Buf.str().c_str());
+				SamplePlayed = voiceState.SamplesPlayed;
+			}
+			
+
+		}
+		
 	}
-	else
-	{
-		s = std::to_string(t);
-	}
-	return s;
 }
-{
-	int a = 5;
-	float b = 10.02f; // truncation error
-	std::string c("ketan");
-
-	OutputDebugStringA(getString(a).c_str());
-	OutputDebugStringA("\n");
-	OutputDebugStringA(getString(b).c_str());
-	OutputDebugStringA("\n");
-	OutputDebugStringA(getString(c).c_str());
-	OutputDebugStringA("\n");
-
-}
-#endif 
-
 
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
@@ -519,6 +519,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 		OutputDebugStringW(L"Cannot register class name\n");
 		return 1;
 	}
+
+
+	g_MusicEvent.create(wil::EventOptions::ManualReset);
+	
+	DWORD ThreadID{};
+	CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
 
 
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);

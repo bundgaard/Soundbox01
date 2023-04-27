@@ -25,6 +25,11 @@
 #define Scoped static
 
 
+template<typename T, typename U>
+constexpr T narrow_cast(U&& u) noexcept
+{
+	return static_cast<T>(std::forward<U>(u));
+}
 
 
 inline consteval int32_t to_rgb(int32_t ColorHex) // 00 36 00 ff

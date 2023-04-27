@@ -127,7 +127,11 @@ namespace tretton63
 
 		if (pDis->itemState & ODS_SELECTED)
 		{
-			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(GRAY_BRUSH));
+			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(GRAY_BRUSH)); // TODO: move this out to styleguide
+		}
+		else if (pDis->itemState & ODS_DISABLED)
+		{
+			FillRect(pDis->hDC, &pDis->rcItem, (HBRUSH)GetStockObject(DKGRAY_BRUSH)); // TODO: move this out to styleguide
 		}
 		else
 		{
@@ -138,7 +142,7 @@ namespace tretton63
 
 		}
 
-		SetTextColor(pDis->hDC, ForegroundColor);
+		SetTextColor(pDis->hDC, ForegroundColor); // TODO: move this up so we can change the color in the various states
 
 		// TODO: fix state drawing and also some nicer background
 		auto Caption = Win32Caption(pDis->hwndItem);

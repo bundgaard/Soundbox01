@@ -142,6 +142,7 @@
     <ClCompile Include="Slider.cpp" />
     <ClCompile Include="StringLayer.cpp" />
     <ClCompile Include="Voice.cpp" />
+    <ClCompile Include="VoiceCallback.cpp" />
     <ClCompile Include="WaveReader.cpp" />
     <ClCompile Include="Win32Layer.cpp" />
     <ClCompile Include="WindowMessages.h" />
@@ -157,6 +158,7 @@
     <ClInclude Include="StringLayer.h" />
     <ClInclude Include="Styleguide.h" />
     <ClInclude Include="Voice.h" />
+    <ClInclude Include="VoiceCallback.h" />
     <ClInclude Include="WaveReader.h" />
     <ClInclude Include="Win32Layer.h" />
   </ItemGroup>
