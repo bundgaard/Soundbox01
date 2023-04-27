@@ -85,12 +85,8 @@ Local XAUDIO2_BUFFER*
 LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 {
 	XAUDIO2_BUFFER* XBuffer = new XAUDIO2_BUFFER{};
-	if (Data->WaveSize <= XAUDIO2_MAX_BUFFER_BYTES)
-		XBuffer->AudioBytes = static_cast<uint32_t>(Data->WaveSize);
-	else
-	{
-		OutputDebugString(L"Failed to resize the WaveSize\n");
-	}
+
+	XBuffer->AudioBytes = narrow_cast<uint32_t>(Data->WaveSize);
 	XBuffer->Flags = XAUDIO2_END_OF_STREAM;
 	XBuffer->pAudioData = (LPBYTE)Data->Location;
 
@@ -504,6 +500,9 @@ DWORD WINAPI ThreadTracker(PVOID pArguments)
 
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
+
+
+	
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 
@@ -524,7 +523,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	g_MusicEvent.create(wil::EventOptions::ManualReset);
 	
 	DWORD ThreadID{};
-	CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
+	HANDLE hTread = CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
 
 
 	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
