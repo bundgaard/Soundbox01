@@ -54,4 +54,13 @@ namespace tretton63
 		}
 
 	}
+
+	void PlayAndPause_Reset(HWND self)
+	{
+		auto State = PlayAndPause_GetState(self);
+		if (State != PlayAndPauseTransition::PLAY)
+		{
+			PlayAndPause_SetCaption(self, PlayAndPauseTransition::PLAY);
+		}
+	}
 }

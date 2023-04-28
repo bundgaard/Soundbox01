@@ -1,11 +1,12 @@
 #pragma once
-
+#include "WindowMessages.h"
 #include <xaudio2.h>
 
 class VoiceCallback : public IXAudio2VoiceCallback
 {
+	HWND m_hwnd;
 public:
-	VoiceCallback()
+	VoiceCallback(HWND Parent) : m_hwnd(Parent)
 	{
 
 	}
@@ -18,6 +19,7 @@ public:
 	void OnStreamEnd() noexcept
 	{
 		OutputDebugStringW(L"Stream ended\n");
+		SendMessage(m_hwnd, WM_CM_STREAM_ENDED, 0, 0);
 	}
 	void OnVoiceProcessingPassStart(UINT32 BytesRequired) noexcept
 	{

@@ -12,16 +12,16 @@ namespace tretton63
 
 	public:
 		PlayAndPauseButton(
-			HWND parent, 
-			int x, int y, 
-			int width, int height, 
-			std::wstring text) : 
+			HWND parent,
+			int x, int y,
+			int width, int height,
+			std::wstring text) :
 			m_hwnd(CreateWindowExW(
-				0, 
-				L"BUTTON", 
-				text.c_str(), 
-				WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 
-				x, y, 
+				0,
+				L"BUTTON",
+				text.c_str(),
+				WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+				x, y,
 				width, height, parent,
 				nullptr, nullptr, nullptr))
 		{
@@ -38,15 +38,16 @@ namespace tretton63
 		{
 			OutputDebugStringW(L"OnClick\n");
 		}
+		void Reset()
+		{
+
+		}
 	private:
 		static LRESULT CALLBACK sWndProc(HWND hwnd, UINT msg, WPARAM  wparam, LPARAM lparam)
 		{
 			PlayAndPauseButton* pButton = reinterpret_cast<PlayAndPauseButton*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 			if (pButton != nullptr)
 			{
-				wchar_t Buf[64] = { 0 };
-				swprintf(Buf, 64, L"Calling local WndProc with 0x%x\n", msg);
-				OutputDebugStringW(Buf);
 				return pButton->WndProc(hwnd, msg, wparam, lparam);
 			}
 			return DefWindowProcW(hwnd, msg, wparam, lparam);
@@ -56,17 +57,9 @@ namespace tretton63
 		{
 			switch (msg)
 			{
-			case WM_COMMAND:
-			{
-				OutputDebugStringW(L"local WM_COMMAND\n");
-				if (HIWORD(wparam) == BN_CLICKED && reinterpret_cast<HWND>(LOWORD(wparam)) == m_hwnd)
-				{
-					OnClick();
-				}
+			default:
+				return CallWindowProcW(m_originalProc, hwnd, msg, wparam, lparam);
 			}
-			return 0;
-			}
-			return CallWindowProcW(m_originalProc, hwnd, msg, wparam, lparam);
 		}
 	};
 
@@ -78,9 +71,11 @@ namespace tretton63
 
 
 	void PlayAndPause_OnClick(HWND self, HWND parent);
+	void PlayAndPause_Reset(HWND self);
 
 	inline PlayAndPauseTransition PlayAndPause_GetState(HWND self);
 	inline void PlayAndPause_SetCaption(HWND self, PlayAndPauseTransition state);
+	
 
 }
 

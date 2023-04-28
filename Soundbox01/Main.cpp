@@ -58,6 +58,7 @@ Global IXAudio2MasteringVoice* master;
 Global IXAudio2SourceVoice* voice1;
 
 Global wil::unique_hwnd PauseAndPlayButton;
+
 Global wil::unique_hwnd VoiceOneGetState;
 Global wil::unique_hwnd MusicFile;
 Global wil::unique_hwnd SoundProgress;
@@ -70,7 +71,7 @@ std::unique_ptr<Slider> VolumeFader02;
 
 Global wil::unique_event g_MusicEvent;
 
-Global bool MusicLoaded;
+// Global bool bMusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
@@ -89,24 +90,39 @@ LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 	XBuffer->AudioBytes = narrow_cast<uint32_t>(Data->WaveSize);
 	XBuffer->Flags = XAUDIO2_END_OF_STREAM;
 	XBuffer->pAudioData = (LPBYTE)Data->Location;
-
 	return XBuffer;
 }
 
+inline void CheckBool(bool Value)
+{
+	if (!Value)
+	{
+		DWORD dwError = GetLastError();
+		wchar_t Buf[64] = { 0 };
+		swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
+		OutputDebugStringW(Buf);
+	}
+}
+
+inline void ClearMusic()
+{
+	g_MusicEvent.ResetEvent();
+	voice1->Stop();
+	voice1->FlushSourceBuffers();
+	if (g_Data != nullptr)
+	{
+		CheckBool(VirtualFree(g_Data->Location, 0, MEM_RELEASE));
+		g_Data.reset();
+		PlayAndPause_Reset(PauseAndPlayButton.get());
+	}
+}
 
 Local void
 VoiceOne_OnClick(HWND self)
 {
-	if (MusicLoaded)
-	{
-		XAUDIO2_VOICE_STATE state{};
-		voice1->GetState(&state, 0);
-		std::wstringstream Out{};
-		Out << L"Samples played: " << state.SamplesPlayed << "\n" << L"Buffers queued: " << state.BuffersQueued << "\n";
-		OutputDebugString(Out.str().c_str());
-	}
-
+	ClearMusic();
 }
+
 
 
 Local BOOL
@@ -119,13 +135,16 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	int Offset = 30;
 
 	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
-	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", PauseAndPlayEvent, posX, posY, Width, Height));
+	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", WM_CM_PLAY_AND_PAUSE_BUTTON, posX, posY, Width, Height));
 	EnableWindow(PauseAndPlayButton.get(), false);
 	posY += Offset;
-	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Voice1 State", VoiceOneGetStateEvent, posX, posY, Width, Height));
+
+	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Stop", WM_CM_STOP_BUTTON, posX, posY, Width, Height));
 	posY += Offset;
+
 	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", WM_CM_LOADFILES, posX, posY, Width, Height);
 	posY += Offset;
+
 	MusicFile.reset(CreateWindow(L"EDIT",
 		L"C:\\Code",
 		WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
@@ -184,24 +203,11 @@ Local void
 OnDestroy(HWND hwnd)
 {
 
-	if (voice1 != nullptr)
+	if (voice1 != nullptr && g_Data != nullptr)
 	{
-		voice1->FlushSourceBuffers();
-		voice1->DestroyVoice();
+		ClearMusic();
 	}
 
-	if (g_Data != nullptr)
-	{
-		if (!VirtualFree(g_Data->Location, 0, MEM_RELEASE))
-		{
-			DWORD dwError = GetLastError();
-			wchar_t Buf[64] = { 0 };
-			swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
-			OutputDebugStringW(Buf);
-		}
-
-	}
-	
 	if (master)
 	{
 		master->DestroyVoice();
@@ -240,12 +246,12 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 {
 	switch (ID)
 	{
-	case PauseAndPlayEvent:
+	case WM_CM_PLAY_AND_PAUSE_BUTTON:
 	{
 		PlayAndPause_OnClick(PauseAndPlayButton.get(), Parent);
 	}
 	break;
-	case VoiceOneGetStateEvent:
+	case WM_CM_STOP_BUTTON:
 	{
 		VoiceOne_OnClick(VoiceOneGetState.get());
 	}
@@ -258,7 +264,7 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 			std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
 			ListBox_ResetContent(MusicList.get());
 			HDC hdc = GetDC(MusicList.get());
-			int LongestWidth = 0;
+			int LongestWidth{};
 			int LongestHeight = 1;
 			int TextHeight{};
 			for (auto const& Filename : Files)
@@ -306,11 +312,24 @@ MusicList_GetSelectedItem()
 	SelectedText.resize(SelectedTextLength);
 	return SelectedText;
 }
-
+inline void CheckHR(HRESULT hr)
+{
+	if (FAILED(hr))
+	{
+		DWORD dwError = GetLastError();
+		if (dwError != 0x00)
+		{
+			OutputDebugStringW(L"Failed to create and configure voice\n");
+			wchar_t Buf[64] = { 0 };
+			swprintf(Buf, 64, L"dwError %x\n", dwError);
+			OutputDebugStringW(Buf);
+		}
+	}
+}
 Local void
 CreateVoiceWithFile(std::wstring const& SelectedText)
 {
-	callback = std::make_unique<CallbackData>();
+	
 	// create voice
 		// Load File from LoadWave
 	WAVEFORMATEX FormatEx{};
@@ -323,17 +342,13 @@ CreateVoiceWithFile(std::wstring const& SelectedText)
 			&FormatEx,
 			0,
 			XAUDIO2_DEFAULT_FREQ_RATIO, callback.get());
-		OutputDebugStringW(L"CreateSourceVoice\n");
 	}
 	if (SUCCEEDED(hr))
 	{
 		hr = voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
-		OutputDebugStringW(L"SetVolume\n");
 	}
 	if (SUCCEEDED(hr))
 	{
-		OutputDebugStringW(L"Foobarfish\n");
-
 		Buffer = LoadBuffer(g_Data);
 		hr = voice1->SubmitSourceBuffer(Buffer);
 
@@ -348,19 +363,7 @@ CreateVoiceWithFile(std::wstring const& SelectedText)
 			OutputDebugStringW(L"Failed to play\n");
 		}
 	}
-	if (FAILED(hr))
-	{
-		DWORD dwError = GetLastError();
-		if (dwError != 0x00)
-		{
-			OutputDebugStringW(L"Failed to create and configure voice\n");
-			wchar_t Buf[64] = { 0 };
-			swprintf(Buf, 64, L"dwError %x\n", dwError);
-			OutputDebugStringW(Buf);
-
-		}
-
-	}
+	CheckHR(hr);
 }
 
 LRESULT CALLBACK
@@ -377,18 +380,20 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_VOLUME_CHANGED:
 	{
 		int Volume = (int)wParam;
-		wchar_t Buf[64] = { 0 };
 		float ToVolume = (100 - Volume) / 100.0f;
-		swprintf(Buf, 64, L"Volume %d -> %.2f\n", Volume, ToVolume);
-		OutputDebugStringW(Buf);
 		g_Volume = ToVolume;
+
 		if (voice1)
 		{
 			voice1->SetVolume(g_Volume, XAUDIO2_COMMIT_NOW);
 		}
 	}
 	return 0;
-
+	case WM_CM_STREAM_ENDED:
+	{
+		ClearMusic();
+	}
+	return 0;
 	case WM_CM_PLAYMUSIC:
 	{
 		OutputDebugStringW(L"Start playing\n");
@@ -421,14 +426,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					if (g_Data && g_Data->Location)
 					{
 						OutputDebugStringW(L"Clear memory\n");
-						if (!VirtualFree(g_Data->Location, 0, MEM_RELEASE))
-						{
-
-							DWORD dwError = GetLastError();
-							wchar_t Buf[64] = { 0 };
-							swprintf(Buf, 64, L"Failed to clear memory\nError %d\n", dwError);
-							OutputDebugStringW(Buf);
-						}
+						CheckBool(VirtualFree(g_Data->Location, 0, MEM_RELEASE));
 						g_Data.release();
 
 					}
@@ -491,10 +489,10 @@ DWORD WINAPI ThreadTracker(PVOID pArguments)
 				OutputDebugStringW(Buf.str().c_str());
 				SamplePlayed = voiceState.SamplesPlayed;
 			}
-			
+
 
 		}
-		
+
 	}
 }
 
@@ -502,7 +500,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 {
 
 
-	
+
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 
@@ -521,7 +519,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 
 
 	g_MusicEvent.create(wil::EventOptions::ManualReset);
-	
+
 	DWORD ThreadID{};
 	HANDLE hTread = CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
 
@@ -534,7 +532,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	}
 	UpdateWindow(hwnd);
 	ShowWindow(hwnd, nCmdShow);
-
+	callback = std::make_unique<CallbackData>(hwnd);
 
 	MSG msg{};
 	while (GetMessageW(&msg, nullptr, 0, 0) > 0)
