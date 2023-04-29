@@ -1,3 +1,4 @@
+
 #include "Application.h"
 #include "WaveReader.h"
 
@@ -42,17 +43,6 @@ Another thing to think about is how to limit the time line to our width, Excel p
 
 */
 
-/* A
-Comment
-On
-Multiple
-Lines
-*/
-
-// Comment on a single line
-
-
-
 Global wil::com_ptr<IXAudio2> audio;
 Global IXAudio2MasteringVoice* master;
 Global IXAudio2SourceVoice* voice1;
@@ -71,7 +61,6 @@ std::unique_ptr<Slider> VolumeFader02;
 
 Global wil::unique_event g_MusicEvent;
 
-// Global bool bMusicLoaded;
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
@@ -93,7 +82,8 @@ LoadBuffer(std::unique_ptr<WAVEDATA> const& Data)
 	return XBuffer;
 }
 
-inline void CheckBool(bool Value)
+inline void
+CheckBool(bool Value)
 {
 	if (!Value)
 	{
@@ -104,11 +94,56 @@ inline void CheckBool(bool Value)
 	}
 }
 
-inline void ClearMusic()
+inline HBRUSH
+Win32CreateSolidBrush(UINT32 r, UINT32 g, UINT32 b)
+{
+	return CreateSolidBrush(RGB(r, g, b));
+}
+
+
+inline RECT
+Win32GetWindowRect(HWND hwnd)
+{
+	RECT Rect{};
+	GetWindowRect(hwnd, &Rect);
+	return Rect;
+}
+
+inline RECT
+Win32GetClientRect(HWND hwnd)
+{
+	RECT Rect{};
+	GetClientRect(hwnd, &Rect);
+	return Rect;
+}
+
+inline void
+CheckHR(HRESULT hr)
+{
+	if (FAILED(hr))
+	{
+		DWORD dwError = GetLastError();
+		if (dwError != 0x00)
+		{
+			OutputDebugStringW(L"Failed to create and configure voice\n");
+			wchar_t Buf[64] = { 0 };
+			swprintf(Buf, 64, L"dwError %x\n", dwError);
+			OutputDebugStringW(Buf);
+		}
+	}
+}
+
+
+inline void
+ClearMusic()
 {
 	g_MusicEvent.ResetEvent();
-	voice1->Stop();
-	voice1->FlushSourceBuffers();
+	if (voice1 != nullptr)
+	{
+		voice1->Stop();
+		voice1->FlushSourceBuffers();
+	}
+
 	if (g_Data != nullptr)
 	{
 		CheckBool(VirtualFree(g_Data->Location, 0, MEM_RELEASE));
@@ -123,6 +158,33 @@ VoiceOne_OnClick(HWND self)
 	ClearMusic();
 }
 
+inline SIZE
+Win32GetFontMetrics(HWND hwnd)
+{
+	HDC hdc = GetDC(hwnd);
+	SIZE S{};
+	auto Caption = Win32Caption(hwnd);
+	std::wstring ClassName{};
+	ClassName.resize(255);
+	int ClassNameSize = GetClassNameW(hwnd, ClassName.data(), 255);
+	ClassName.resize(ClassNameSize + 1);
+	OutputDebugStringW(ClassName.c_str());
+	ClassName.resize(ClassNameSize);
+	if (ClassName == L"ListBox")
+	{
+		auto ListBoxTextLen = ListBox_GetTextLen(hwnd, 0);
+		std::wstring ListBoxText{};
+		ListBoxText.resize(ListBoxTextLen);
+		ListBox_GetText(hwnd, 0, ListBoxText.data());
+		CheckBool(GetTextExtentPoint32W(hdc, ListBoxText.c_str(), ListBoxText.size(), &S));
+	}
+	if (Caption.has_value())
+	{
+		CheckBool(GetTextExtentPoint32W(hdc, Caption->c_str(), Caption->size(), &S));
+	}
+	ReleaseDC(hwnd, hdc);
+	return S;
+}
 
 
 Local BOOL
@@ -142,7 +204,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Stop", WM_CM_STOP_BUTTON, posX, posY, Width, Height));
 	posY += Offset;
 
-	auto LoadFilesToList = Win32CreateButton(hwnd, L"Load from path", WM_CM_LOADFILES, posX, posY, Width, Height);
+	LoadFilesToList.reset(Win32CreateButton(hwnd, L"Load from path", WM_CM_LOADFILES, posX, posY, Width, Height));
 	posY += Offset;
 
 	MusicFile.reset(CreateWindow(L"EDIT",
@@ -151,32 +213,23 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 		posX, posY,
 		Width, Height,
 		hwnd,
-		(HMENU)WM_USER + 3,
+		nullptr,
 		GetModuleHandleW(nullptr),
 		nullptr));
 	posY += Offset;
 
-	auto MusicLocationCaption = Win32Caption(MusicFile.get());
-
-	HDC hdc = GetDC(MusicFile.get());
-	TEXTMETRICW Metrics{};
-	GetTextMetricsW(hdc, &Metrics);
-	SelectObject(hdc, ButtonFont.get());
-
-	SIZE S{};
-	GetTextExtentPoint32W(hdc, MusicLocationCaption->c_str(), narrow_cast<int>(MusicLocationCaption->size()), &S);
-	SetWindowPos(MusicFile.get(), nullptr, 0, 0, S.cx + 15, S.cy + 5, SWP_NOMOVE | SWP_NOACTIVATE);
-	ReleaseDC(MusicFile.get(), hdc);
+	SIZE S = Win32GetFontMetrics(MusicFile.get());
+	SetWindowPos(MusicFile.get(), nullptr, 0, 0, std::max(S.cx, static_cast<LONG>(Width)), std::min(S.cy + 5, static_cast<LONG>(Height)), SWP_NOMOVE | SWP_NOACTIVATE);
 
 	MusicList.reset(Win32CreateListbox(hwnd, posX, posY, Width, 150));
 
 	Win32SetFont(PauseAndPlayButton.get(), ButtonFont.get());
 	Win32SetFont(VoiceOneGetState.get(), ButtonFont.get());
 	Win32SetFont(MusicFile.get(), ButtonFont.get());
-	Win32SetFont(LoadFilesToList, ButtonFont.get());
+	Win32SetFont(LoadFilesToList.get(), ButtonFont.get());
 	Win32SetFont(MusicList.get(), ButtonFont.get());
 
-	VolumeFader02 = std::make_unique<Slider>(hwnd, 500, 10, 64, 128); // TODO: reimplement min and max
+	VolumeFader02 = std::make_unique<Slider>(hwnd, 10 + posX + Width, 10, 64, Height * 4 + (3 * 4)); // TODO: reimplement min and max
 	Win32SetFont(VolumeFader02->Handle(), ButtonFont.get());
 
 	HRESULT hr = S_OK;
@@ -241,6 +294,7 @@ OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 	return (HBRUSH)GetStockObject(NULL_BRUSH);
 }
 
+
 Local void
 OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 {
@@ -263,35 +317,16 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 		{
 			std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
 			ListBox_ResetContent(MusicList.get());
-			HDC hdc = GetDC(MusicList.get());
-			int LongestWidth{};
-			int LongestHeight = 1;
-			int TextHeight{};
 			for (auto const& Filename : Files)
 			{
 				ListBox_AddString(MusicList.get(), Filename.c_str());
-				if (Filename.size() < INT_MAX)
-				{
-					SIZE TextSize{};
-					GetTextExtentPoint32W(hdc, Filename.c_str(), static_cast<int>(Filename.size()), &TextSize);
-					if (TextSize.cx > LongestWidth)
-					{
-						LongestWidth = TextSize.cx;
-					}
-					TextHeight = TextSize.cy;
-					LongestHeight++;
-				}
-				else
-				{
-					OutputDebugString(L"Could not redeclare size_t as int, it was too large\n");
-				}
 			}
-			ReleaseDC(MusicList.get(), hdc);
 
-			RECT MusicListRect{};
-			GetWindowRect(MusicList.get(), &MusicListRect);
-			MusicListRect.right = LongestWidth;
-			MusicListRect.bottom = TextHeight * LongestHeight;
+			SIZE S = Win32GetFontMetrics(MusicList.get());
+			RECT MusicListRect = Win32GetWindowRect(MusicList.get());
+			MusicListRect.right = S.cx;
+			MusicListRect.bottom = S.cy * (Files.size() + 1);
+
 			SetWindowPos(MusicList.get(), nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
 			ShowWindow(MusicList.get(), SW_SHOW);
 			EnableWindow(PauseAndPlayButton.get(), true);
@@ -312,24 +347,11 @@ MusicList_GetSelectedItem()
 	SelectedText.resize(SelectedTextLength);
 	return SelectedText;
 }
-inline void CheckHR(HRESULT hr)
-{
-	if (FAILED(hr))
-	{
-		DWORD dwError = GetLastError();
-		if (dwError != 0x00)
-		{
-			OutputDebugStringW(L"Failed to create and configure voice\n");
-			wchar_t Buf[64] = { 0 };
-			swprintf(Buf, 64, L"dwError %x\n", dwError);
-			OutputDebugStringW(Buf);
-		}
-	}
-}
+
 Local void
 CreateVoiceWithFile(std::wstring const& SelectedText)
 {
-	
+
 	// create voice
 		// Load File from LoadWave
 	WAVEFORMATEX FormatEx{};
@@ -498,9 +520,6 @@ DWORD WINAPI ThreadTracker(PVOID pArguments)
 
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
-
-
-
 	HRESULT hr = S_OK;
 	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 
@@ -509,30 +528,24 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	IccEx.dwICC = ICC_STANDARD_CLASSES;
 	InitCommonControlsEx(&IccEx);
 
+	wil::unique_hbrush hbrBackground(CreateSolidBrush(to_rgb(0x003600ff)));
 
-	HBRUSH hbrBackground = CreateSolidBrush(to_rgb(0x003600ff));
-	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground))
+	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground.get()))
 	{
 		OutputDebugStringW(L"Cannot register class name\n");
 		return 1;
 	}
 
 
-	g_MusicEvent.create(wil::EventOptions::ManualReset);
+	wil::unique_hwnd hwnd(Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst));
 
+	UpdateWindow(hwnd.get());
+	ShowWindow(hwnd.get(), nCmdShow);
+
+	g_MusicEvent.create(wil::EventOptions::ManualReset);
 	DWORD ThreadID{};
 	HANDLE hTread = CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
-
-
-	HWND hwnd = Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst);
-	if (hwnd == nullptr)
-	{
-		OutputDebugString(L"CreateWindowEx failed\n");
-		return 1;
-	}
-	UpdateWindow(hwnd);
-	ShowWindow(hwnd, nCmdShow);
-	callback = std::make_unique<CallbackData>(hwnd);
+	callback = std::make_unique<CallbackData>(hwnd.get());
 
 	MSG msg{};
 	while (GetMessageW(&msg, nullptr, 0, 0) > 0)
@@ -540,9 +553,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 		TranslateMessage(&msg);
 		DispatchMessageW(&msg);
 	}
-
-	DestroyWindow(hwnd);
-	DeleteObject(hbrBackground);
 
 	return 0;
 }

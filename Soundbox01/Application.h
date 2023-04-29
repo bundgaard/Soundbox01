@@ -1,5 +1,6 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 
 #ifdef _USE_MM_AUDIO
@@ -17,6 +18,8 @@
 #include <atlbase.h>
 
 #include <string>
+
+#include <algorithm>
 
 
 
