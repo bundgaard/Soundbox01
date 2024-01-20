@@ -47,26 +47,26 @@ Global wil::com_ptr<IXAudio2> audio;
 Global IXAudio2MasteringVoice* master;
 Global IXAudio2SourceVoice* voice1;
 
-Global wil::unique_hwnd PauseAndPlayButton;
+Global wil::unique_hwnd pause_play_button;
 
-Global wil::unique_hwnd VoiceOneGetState;
-Global wil::unique_hwnd MusicFile;
+Global wil::unique_hwnd voice_one_state;
+Global wil::unique_hwnd music_file;
 Global wil::unique_hwnd SoundProgress;
 Global wil::unique_hwnd LoadFilesToList;
 
-Global wil::unique_hwnd MusicList;
+Global wil::unique_hwnd music_lsit;
 Global wil::unique_hfont ButtonFont;
 
 std::unique_ptr<Slider> VolumeFader02;
 
-Global wil::unique_event g_MusicEvent;
+Global wil::unique_event g_music_event;
 
 Global bool MouseHeld;
 Global int nPos;
 Global float g_Volume = 1.0f; // TODO: fix so it matches slider.
-Global std::unique_ptr<WAVEDATA> g_Data;
+Global std::unique_ptr<WAVEDATA> g_data;
 Global XAUDIO2_BUFFER* Buffer;
-Global std::wstring PreviousSelectedText;
+Global std::wstring previus_selected_text;
 std::unique_ptr<CallbackData> callback; // TODO fix the naming
 
 
@@ -137,18 +137,18 @@ CheckHR(HRESULT hr)
 inline void
 ClearMusic()
 {
-	g_MusicEvent.ResetEvent();
+	g_music_event.ResetEvent();
 	if (voice1 != nullptr)
 	{
 		voice1->Stop();
 		voice1->FlushSourceBuffers();
 	}
 
-	if (g_Data != nullptr)
+	if (g_data != nullptr)
 	{
-		CheckBool(VirtualFree(g_Data->Location, 0, MEM_RELEASE));
-		g_Data.reset();
-		PlayAndPause_Reset(PauseAndPlayButton.get());
+		CheckBool(VirtualFree(g_data->Location, 0, MEM_RELEASE));
+		g_data.reset();
+		PlayAndPause_Reset(pause_play_button.get());
 	}
 }
 
@@ -201,17 +201,17 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 	int fontSize = 14 * scaling;
 
 	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", fontSize, FW_BOLD));
-	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", WM_CM_PLAY_AND_PAUSE_BUTTON, posX, posY, Width, Height));
-	EnableWindow(PauseAndPlayButton.get(), false);
+	pause_play_button.reset(Win32CreateButton(hwnd, L"Play", WM_CM_PLAY_AND_PAUSE_BUTTON, posX, posY, Width, Height));
+	EnableWindow(pause_play_button.get(), false);
 	posY += Offset;
 
-	VoiceOneGetState.reset(Win32CreateButton(hwnd, L"Stop", WM_CM_STOP_BUTTON, posX, posY, Width, Height));
+	voice_one_state.reset(Win32CreateButton(hwnd, L"Stop", WM_CM_STOP_BUTTON, posX, posY, Width, Height));
 	posY += Offset;
 
 	LoadFilesToList.reset(Win32CreateButton(hwnd, L"Load from path", WM_CM_LOADFILES, posX, posY, Width, Height));
 	posY += Offset;
 
-	MusicFile.reset(CreateWindow(L"EDIT",
+	music_file.reset(CreateWindow(L"EDIT",
 		L"C:\\Code",
 		WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
 		posX, posY,
@@ -222,16 +222,16 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 		nullptr));
 	posY += Offset;
 
-	SIZE S = Win32GetFontMetrics(MusicFile.get());
-	SetWindowPos(MusicFile.get(), nullptr, 0, 0, std::max(S.cx, static_cast<LONG>(Width)), std::min(S.cy + 5, static_cast<LONG>(Height)), SWP_NOMOVE | SWP_NOACTIVATE);
+	SIZE S = Win32GetFontMetrics(music_file.get());
+	SetWindowPos(music_file.get(), nullptr, 0, 0, std::max(S.cx, static_cast<LONG>(Width)), std::min(S.cy + 5, static_cast<LONG>(Height)), SWP_NOMOVE | SWP_NOACTIVATE);
 
-	MusicList.reset(Win32CreateListbox(hwnd, posX, posY, Width, 150));
+	music_lsit.reset(Win32CreateListbox(hwnd, posX, posY, Width, 150));
 
-	Win32SetFont(PauseAndPlayButton.get(), ButtonFont.get());
-	Win32SetFont(VoiceOneGetState.get(), ButtonFont.get());
-	Win32SetFont(MusicFile.get(), ButtonFont.get());
+	Win32SetFont(pause_play_button.get(), ButtonFont.get());
+	Win32SetFont(voice_one_state.get(), ButtonFont.get());
+	Win32SetFont(music_file.get(), ButtonFont.get());
 	Win32SetFont(LoadFilesToList.get(), ButtonFont.get());
-	Win32SetFont(MusicList.get(), ButtonFont.get());
+	Win32SetFont(music_lsit.get(), ButtonFont.get());
 
 	VolumeFader02 = std::make_unique<Slider>(hwnd, 10 + posX + Width, 10, 64, Height * 4 + (3 * 4)); // TODO: reimplement min and max
 	Win32SetFont(VolumeFader02->Handle(), ButtonFont.get());
@@ -260,7 +260,7 @@ Local void
 OnDestroy(HWND hwnd)
 {
 
-	if (voice1 != nullptr && g_Data != nullptr)
+	if (voice1 != nullptr && g_data != nullptr)
 	{
 		ClearMusic();
 	}
@@ -300,40 +300,40 @@ OnColorButton(HWND Parent, HDC hdc, HWND Child, int Type)
 
 
 Local void
-OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
+OnCommand(HWND parent, int ID, HWND Child, UINT CodeNotify)
 {
 	switch (ID)
 	{
 	case WM_CM_PLAY_AND_PAUSE_BUTTON:
 	{
-		PlayAndPause_OnClick(PauseAndPlayButton.get(), Parent);
+		PlayAndPause_OnClick(pause_play_button.get(), parent);
 	}
 	break;
 	case WM_CM_STOP_BUTTON:
 	{
-		VoiceOne_OnClick(VoiceOneGetState.get());
+		VoiceOne_OnClick(voice_one_state.get());
 	}
 	break;
 	case WM_CM_LOADFILES:
 	{
-		auto Path = Win32Caption(MusicFile.get());
+		auto Path = Win32Caption(music_file.get());
 		if (Path.has_value())
 		{
-			std::vector<std::wstring> Files = ReadFilesIntoList(Path.value());
-			ListBox_ResetContent(MusicList.get());
-			for (auto const& Filename : Files)
+			std::vector<std::wstring> files = ReadFilesIntoList(Path.value());
+			ListBox_ResetContent(music_lsit.get());
+			for (auto const& filename : files)
 			{
-				ListBox_AddString(MusicList.get(), Filename.c_str());
+				ListBox_AddString(music_lsit.get(), filename.c_str());
 			}
 
-			SIZE S = Win32GetFontMetrics(MusicList.get());
-			RECT MusicListRect = Win32GetWindowRect(MusicList.get());
-			MusicListRect.right = S.cx;
-			MusicListRect.bottom = S.cy * (Files.size() + 1);
+			SIZE music_list_font_size = Win32GetFontMetrics(music_lsit.get());
+			RECT music_list_rect = Win32GetWindowRect(music_lsit.get());
+			music_list_rect.right = music_list_font_size.cx;
+			music_list_rect.bottom = music_list_font_size.cy * (files.size() + 1);
 
-			SetWindowPos(MusicList.get(), nullptr, 0, 0, MusicListRect.right, MusicListRect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
-			ShowWindow(MusicList.get(), SW_SHOW);
-			EnableWindow(PauseAndPlayButton.get(), true);
+			SetWindowPos(music_lsit.get(), nullptr, 0, 0, music_list_rect.right, music_list_rect.bottom, SWP_NOMOVE | SWP_NOACTIVATE);
+			ShowWindow(music_lsit.get(), SW_SHOW);
+			EnableWindow(pause_play_button.get(), true);
 		}
 	}
 	break;
@@ -344,28 +344,28 @@ OnCommand(HWND Parent, int ID, HWND Child, UINT CodeNotify)
 Local std::wstring
 MusicList_GetSelectedItem()
 {
-	auto SelectedIndex = ListBox_GetCurSel(MusicList.get());
-	auto SelectedTextLength = ListBox_GetTextLen(MusicList.get(), SelectedIndex);
-	std::wstring SelectedText(SelectedTextLength + 1, L'\0');
-	ListBox_GetText(MusicList.get(), SelectedIndex, SelectedText.data());
-	SelectedText.resize(SelectedTextLength);
-	return SelectedText;
+	auto selected_index = ListBox_GetCurSel(music_lsit.get());
+	auto selected_text_len = ListBox_GetTextLen(music_lsit.get(), selected_index);
+	std::wstring selected_text(selected_text_len + 1, L'\0');
+	ListBox_GetText(music_lsit.get(), selected_index, selected_text.data());
+	selected_text.resize(selected_text_len);
+	return selected_text;
 }
 
 Local void
-CreateVoiceWithFile(std::wstring const& SelectedText)
+CreateVoiceWithFile(std::wstring const& selected_text)
 {
 
 	// create voice
 		// Load File from LoadWave
-	WAVEFORMATEX FormatEx{};
-	g_Data = LoadWaveMMap(&FormatEx, SelectedText);
+	WAVEFORMATEX format_ex{};
+	g_data = LoadWaveMMap(&format_ex, selected_text);
 	HRESULT hr = S_OK;
 	if (SUCCEEDED(hr))
 	{
 		hr = audio->CreateSourceVoice(
 			&voice1,
-			&FormatEx,
+			&format_ex,
 			0,
 			XAUDIO2_DEFAULT_FREQ_RATIO, callback.get());
 	}
@@ -375,14 +375,14 @@ CreateVoiceWithFile(std::wstring const& SelectedText)
 	}
 	if (SUCCEEDED(hr))
 	{
-		Buffer = LoadBuffer(g_Data);
+		Buffer = LoadBuffer(g_data);
 		hr = voice1->SubmitSourceBuffer(Buffer);
 
 		if (SUCCEEDED(hr))
 		{
 			hr = voice1->Start(XAUDIO2_COMMIT_NOW); // TODO: need to refactor this into one entry to play and pause as we now have double entries, which is confusing.
-			g_MusicEvent.SetEvent();
-			PreviousSelectedText = SelectedText;
+			g_music_event.SetEvent();
+			previus_selected_text = selected_text;
 		}
 		if (FAILED(hr))
 		{
@@ -405,9 +405,9 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	case WM_VOLUME_CHANGED:
 	{
-		int Volume = (int)wParam;
-		float ToVolume = (100 - Volume) / 100.0f;
-		g_Volume = ToVolume;
+		int volume = (int)wParam;
+		float to_volume = (100 - volume) / 100.0f;
+		g_Volume = to_volume;
 
 		if (voice1)
 		{
@@ -426,14 +426,14 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		// Extract selected file from listbox
 		// Create voice and fill the voice with the music
 
-		auto SelectedText = MusicList_GetSelectedItem();
-		OutputDebugStringW(SelectedText.c_str());
+		auto selected_text = MusicList_GetSelectedItem();
+		OutputDebugStringW(selected_text.c_str());
 		OutputDebugStringW(L"\n");
 
 
 		if (voice1 != nullptr)
 		{
-			if (SelectedText != PreviousSelectedText)
+			if (selected_text != previus_selected_text)
 			{
 				OutputDebugStringW(L"Reload music\n");
 				HRESULT hr = S_OK;
@@ -449,26 +449,26 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				{
 					voice1->DestroyVoice();
 					OutputDebugStringW(L"Flush buffers OK\n");
-					if (g_Data && g_Data->Location)
+					if (g_data && g_data->Location)
 					{
 						OutputDebugStringW(L"Clear memory\n");
-						CheckBool(VirtualFree(g_Data->Location, 0, MEM_RELEASE));
-						g_Data.release();
+						CheckBool(VirtualFree(g_data->Location, 0, MEM_RELEASE));
+						g_data.release();
 
 					}
 				}
-				CreateVoiceWithFile(SelectedText);
+				CreateVoiceWithFile(selected_text);
 			}
 			else
 			{
 				voice1->Start();
-				g_MusicEvent.SetEvent();
+				g_music_event.SetEvent();
 
 			}
 		}
 		else
 		{
-			CreateVoiceWithFile(SelectedText);
+			CreateVoiceWithFile(selected_text);
 		}
 	}
 	return 0;
@@ -480,7 +480,7 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (voice1 != nullptr)
 		{
 			voice1->Stop(XAUDIO2_COMMIT_NOW);
-			g_MusicEvent.ResetEvent();
+			g_music_event.ResetEvent();
 		}
 	}
 	return 0;
@@ -493,27 +493,27 @@ SoundboxProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 DWORD WINAPI ThreadTracker(PVOID pArguments)
 {
-	UINT64 SamplePlayed{};
+	UINT64 sample_played{};
 
 	while (true)
 	{
-		WaitForSingleObject(g_MusicEvent.get(), INFINITE);
+		WaitForSingleObject(g_music_event.get(), INFINITE);
 
 		if (voice1 != nullptr)
 		{
-			XAUDIO2_VOICE_STATE voiceState{};
-			voice1->GetState(&voiceState);
+			XAUDIO2_VOICE_STATE voice_state{};
+			voice1->GetState(&voice_state);
 
-			if (voiceState.SamplesPlayed != SamplePlayed)
+			if (voice_state.SamplesPlayed != sample_played)
 			{
-				std::wstringstream Buf{};
-				Buf << L"State "
-					<< std::to_wstring(voiceState.SamplesPlayed)
+				std::wstringstream buf{};
+				buf << L"State "
+					<< std::to_wstring(voice_state.SamplesPlayed)
 					<< L" of "
-					<< std::to_wstring(voiceState.BuffersQueued)
+					<< std::to_wstring(voice_state.BuffersQueued)
 					<< L"\n";
-				OutputDebugStringW(Buf.str().c_str());
-				SamplePlayed = voiceState.SamplesPlayed;
+				OutputDebugStringW(buf.str().c_str());
+				sample_played = voice_state.SamplesPlayed;
 			}
 
 
@@ -525,16 +525,16 @@ DWORD WINAPI ThreadTracker(PVOID pArguments)
 int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lpszCmdLine, _In_ int nCmdShow)
 {
 	HRESULT hr = S_OK;
-	auto ComInit = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
+	auto co_init = Defer<HRESULT, void()>(CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE), []() -> void { CoUninitialize(); });
 
-	INITCOMMONCONTROLSEX IccEx{};
-	IccEx.dwSize = sizeof(INITCOMMONCONTROLSEX);
-	IccEx.dwICC = ICC_STANDARD_CLASSES;
-	InitCommonControlsEx(&IccEx);
+	INITCOMMONCONTROLSEX icc{};
+	icc.dwSize = sizeof(INITCOMMONCONTROLSEX);
+	icc.dwICC = ICC_STANDARD_CLASSES;
+	InitCommonControlsEx(&icc);
 
-	wil::unique_hbrush hbrBackground(CreateSolidBrush(to_rgb(0x003600ff)));
+	wil::unique_hbrush background_brush(CreateSolidBrush(to_rgb(0x003600ff)));
 
-	if (!Win32RegisterClass(hInst, SoundboxProc, hbrBackground.get()))
+	if (!Win32RegisterClass(hInst, SoundboxProc, background_brush.get()))
 	{
 		OutputDebugStringW(L"Cannot register class name\n");
 		return 1;
@@ -550,7 +550,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 	UpdateWindow(hwnd.get());
 	ShowWindow(hwnd.get(), nCmdShow);
 
-	g_MusicEvent.create(wil::EventOptions::ManualReset);
+	g_music_event.create(wil::EventOptions::ManualReset);
 	DWORD ThreadID{};
 	HANDLE hTread = CreateThread(nullptr, 0, &ThreadTracker, 0, 0, &ThreadID);
 	callback = std::make_unique<CallbackData>(hwnd.get());
