@@ -190,13 +190,17 @@ Win32GetFontMetrics(HWND hwnd)
 Local BOOL
 OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 {
+	auto dpi = GetDpiForWindow(hwnd);
+	double scaling = dpi / 96.0;
+
 	int posX = 10;
 	int posY = 10;
-	int Width = 100;
-	int Height = 25;
-	int Offset = 30;
+	int Width = 100 * scaling;
+	int Height = 25 * scaling;
+	int Offset = 30 * scaling;
+	int fontSize = 14 * scaling;
 
-	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", 14, FW_BOLD));
+	ButtonFont.reset(Win32CreateFont(L"Comic Sans MS", fontSize, FW_BOLD));
 	PauseAndPlayButton.reset(Win32CreateButton(hwnd, L"Play", WM_CM_PLAY_AND_PAUSE_BUTTON, posX, posY, Width, Height));
 	EnableWindow(PauseAndPlayButton.get(), false);
 	posY += Offset;
@@ -211,7 +215,7 @@ OnCreate(HWND hwnd, LPCREATESTRUCT lpcs)
 		L"C:\\Code",
 		WS_VISIBLE | WS_CHILD | WS_BORDER | ES_AUTOHSCROLL,
 		posX, posY,
-		Width, Height,
+		Width, Height+7,
 		hwnd,
 		nullptr,
 		GetModuleHandleW(nullptr),
@@ -538,7 +542,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hPrev, _In_ LPSTR lp
 
 
 	wil::unique_hwnd hwnd(Win32CreateWindow(CTITLENAME, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hInst));
-
+	auto dpi = GetDpiForWindow(hwnd.get());
+	RECT rct{};
+	GetClientRect(hwnd.get(), &rct);
+	AdjustWindowRectExForDpi(&rct, WS_OVERLAPPEDWINDOW, false, WS_EX_OVERLAPPEDWINDOW, dpi);
+	SetWindowPos(hwnd.get(), nullptr, rct.left, rct.top, (rct.right - rct.left), rct.bottom - rct.top, SWP_NOMOVE|SWP_NOACTIVATE);
 	UpdateWindow(hwnd.get());
 	ShowWindow(hwnd.get(), nCmdShow);
 
